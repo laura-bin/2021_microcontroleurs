@@ -1,0 +1,196 @@
+
+
+
+Application : générateur de signaux
+PIC : 16F876A, 16F877A ou 16F887
+Bus : I2C
+Sortie signal : DAC 0808 connection directe au PIC
+Paramètres : fréquence, type et rapport cyclique du signal
+LCD : connection au bus I2C via IO expander 16 bits
+
+L'application doit utiliser au moins une source d'interruption, gérer un LCD et connecter au moins un module subordonné en mode I2C
+
+L'application permet de générer un signal simple, carré ou triangulaire, de fréquence et rapport cyclique paramétrables. Le signal sera généré par l'intermédiaire d'un DAC 8 bits.
+
+
+
+Documents à rendre pour le 11/01/2021 au plus tard :
+• Au moins deux versions intermédiaires du projet
+• Le projet MPLABX final
+• Le fichier Proteus associé à ce projet
+• Un rapport de 5-6 pages reprenant :
+◦ La description du projet et une brève analyse de celui-ci
+◦ Une description du fonctionnement de votre programme
+◦ Une justification des circuits et modules utilisés
+◦ La configuration du microcontrôleur
+◦ Les tests réalisés
+◦ Les problèmes rencontrés
+
+
+Les 3 PIC proposés ont le module MSSP
+
+générer signal analogique -> CCP campture/compare ???
+BUS I2C -> MSSP
+IO expander 16 bits
+
+utiliser une interruption
+DAC 8 bits
+
+PIC16F887 is quite a bit nicer with enhanced peripherals and far more flexible ADC configuration.
+https://www.kanda.com/blog/microcontrollers/pic16f887a/
+
+le 16F887  plus d'analogiques (pas forcément nécessaire), les mêmes CCP, MSSP modules, mais est 2x moins cher
+ADC plus facilement configurable ?
+-> ça n'a pas de sens d'utiliser un moins bon et + cher
+
+
+===================
+l'écran LCD est connecté via I2C mais le DAC est connécté directement au PIC car les I2C fonctionne en 100 ou 400 kHz -> on va perdre en bande passante (le temps que le convertisseur recoive les informations sur ses 8 PINs est nettement plus long) il faudrait utiliser un I2C rapide (ie à 1MHz) mais ce n'est pas un standard
+
+Possibilité: connecter aussi le clavier à travers le bus I2C -> possibilité d'utiliser une interruption. Mais la gestion du I2C devietn alors plus compliquée parce qu'il faut alors aussi lire (la communication est bidirectionnelle)
+
+
+Informations du signal affichées sur le LCD:
+    - Forme : triangle ou square -> switch
+    - Fréquence : 200 (on doit pouvoir augmanter et diminuer)
+    - Amplitute : 100 (idem)
+    - Rapport cyclique : 50% (idem)
+    - identificateur R (running) ou C (configuration) -> switch
+        -> Press start... press ... to stop...
+
+On a un mode running ou config parce que on n'a qu'un mode d'interruption -> pourrait créer des conflits
+En mode running, on génère le signal, en mode config, on lit les entrées (on scanne le clavier)
+
+Les temsp hauts et bas du signal durent 32 microsecondes car le module compare est branché sur 32 en prescaler 1:1 -> l'unité de temps est la microseconde et elle est réglée à 32 -> on a une unité sur 32 micros -> la période du signal est de 64 micros -> on est à peu près à 12kHz
+Pour faire un cycle d'interruption, il faut environ 32 instructions machines -> on ne pourrait pas aller plus vite. C'est aussi pour ça qu'il vaut mieux avoir le mode run/config -> sinon on aurait trop d'instructions et on pourrait aller à des fréquences moins hautes ou on aurait un phénomène de trashing
+Le temps d'un niveau (signal haut ou bas pour le signal carré ou pallier pour le triangulaire) ne peut donc pas être plus rapide
+On pourrait être plus rapide en augmentant la fréquence de la clock
+
+Le DAC a un temps de mise à jour de 150 nanosec (cf datasheet) -> ie il lui faut 2/10 de microsec pour se mettre à jour or si j'utilise une fréquence de cristal à 20MHz, le processeur a une fréquence de 5MHz -> 0,2 microsec => on se rapproche de la limite du DAC
+
+J'ai choisi des PB pour les fréquence, amplitu et duty cycle mais pourquoi ne pas mettre des potentionmètres ?
+
+J'ai fait une seconde version avec des potentiomètres pour régler la fréquance, l'amplitude et le rapport cyclique du signal. Par contre je ne me suis pas encore replongée dans les différentes configurations à faire pour les entrées analogique donc ce n'est peut-être pas correct.
+
+
+Pour l'interface, j'ai choisi les composants les plus simples possibles puisqu'il ne s'agit pas de faire le générateur de signaux le plus complexe et complet possible.
+Choix de la simplicité et économie des ressources
+
+Les boutons sont utilisés en polling parce que je ne dispose que d'un niveau d'interruption que je suis obligée dd'utiliser pour la génération du signal
+
+LE 887 est plus simple d'utilisation : pas besoin de sauvegarder le PCLATH (sauf si on utilise des computed goto)
+
+J'ai choisi l'I/O expander PCA9535 car connection I2C (ne supporte pas el broadcast masi je ne l'utilise pas)
+
+Problemes rencontrés: connection I2C difficile à débugger (lire les datasheets et faire un projet simple qui n'utilise qu'un LCD)
+
+Le schéma de connection du DAC0808 se trouve dans la datasheet (typical application)
+
+La valeur minimum du comparateur (pour le signal le plus rapide) est 2
+
+premiere application (1/12): fréquence la + rapide env 800Hz
+
+Le DAC est connecté directement au PIC car si on le connectait via I2C, on perdrait en bande passante (car fonctionne en 400kHz)
+
+Bouton Run/config car on n'a qu'un mode d'interruption et elle est utilisée par le module CCP. Ici on veut faire une interruption la plus courte possible pour pouvoir générer des fréquences les plus hautes possibles -> permet d'économiser les instructions qui scannent les entrées en mode RUN
+Le mode RUN config à 0 = RUN, à 1, config
+
+(exemple 1) Le module compare est branché sur 32 en prescaler 1:1 ie l'unité de temps est la microseconde et elle est réglée à 32. Il faut 32 interruptions pour faire un cycle d'interruption et si on en a plus (si on veut en faire plus), on a un phénomène de trashing
+
+Si on augmente la fréquence du PIC, le signal appraît arrondi à cause de la bande passante de l'oscilloscope et du circuit complet n'est plus suffisante
+Le DAC a un temps de mise à jour de 150nanosec (cf faste setting time dans la datasheet), or si j'utilise un fréquence de crystal de 20MHz, la fréquence de processeur est de 5MHz, le temps de cycle unitaire est donc de 200 nanosec et on se rapproche de la vitesse de mise à jour du DAC. Ici, la vitesse est de 32x200 nanosec (temps d'interruption). On est toujours bons au niveau du DAC même si on se rapproche de sa limite. C'est donc probablement les suicuits à l'arrière qui posent problème. Même en revenant à 4MHz, le signal est un peu déformé à cause des temps de montée du circuit
+
+Les entrées sont en connection directe sur le PIC car on n'a pas besoin d'économiser les PIN pour ce projet
+
+Allumage -> RUN LED allumée / CONFIG LED clignottante
+
+L'arithmétiqeu flottante prend beaucoup d'instructions. L'application en assembleur ne va donc pas permettre de faire des fréquences très précices (type 217 Hz) masi plutôt avancer par pas.
+
+Types de signaux à générer : en rampe, triangulaire et carré. Rapport cyclique par 10% et amplitude par pas de 10 aussi.
+
+Pour pouvoir travailler à des fréquences plus hautes, le PIC est configuré à 20MHz
+
+I2C clock = Fcy / (4*(SSPADD+1))
+
+400000 = 1000000 / (4*11)
+
+Pour la communication I2C
+- je choisis de vérifier la fin da la communication par le check du SSPIF (automatiquement à 1 en fin d'envoi de byte). Cette méthode est moins sécurisée que de check idle (les différents bits...). Mais elle est plus simple et plus rapide. En plus, tous les bits à chacker ne sont pas utilisés (les receive, acknowledgement). Je ne fais que transmettre des informations au LCD et ces infos ne sont pas critiques (au pire il y aura un bug d'affichage)
+
+
+Prendre le contrôle du bus I2C : (p 189)
+- quand P est set
+- quand S et P sont clear et que le bus est idle
+
+Le mode master permet de ne pas devoir contrôler les sortie SDA et SCL
+
+événements qui settent le SSPIF :
+- start condition (set S) ou repeat start condition
+- stop condition (set P)
+- byte transféré (envoyé pour nous mais aussi recu si ...)
+- ack transmis
+
+écrire dans le SSPBUF initie la transmission
+
+pas de queuing -> il faut par exemple attendre que la start condition soit finie avant d'écrire dans le SSPBUF
+
+vu que je vérifie dans l'ordre à chaque fois (start -> SSPIF, write dasn SSPBUF -> SSPIF, etc...) et qu'il n'y a qu'en mode config que le bus I2C est utilisé et uniquement pour écrire sur le PCA I/O extender qui lié au LCD? je n'ai pas besoin de checker que le I2C ets idle ?
+
+transmission :
+-> start condition (set le bit, le mode master gère tout derrière) -> SSPIF is set
+-> écrire dans le SSPBUF (seriel buffer -> les données sont transmises automatiquement) -> SSPIF is set
+    byte d'adresse + bit R/W (0 pour une transmission)
+    byte de data
+    ...
+-> stop condition
+
+ici je n'utilise pas l'acknowledgement
+
+The Baud Rate Generator used for the SPI mode operation
+is now used to set the SCL clock frequency for
+either 100 kHz, 400 kHz, or 1 MHz I2C operation. The
+Baud Rate Generator reload value is contained in the
+lower 7 bits of the SSPADD register. The Baud Rate
+Generator will automatically begin counting on a write
+to the SSPBUF. Once the given operation is complete
+(i.e., transmission of the last data bit is followed by
+ACK), the internal clock will automatically stop counting
+and the SCL pin will remain in its last state.
+
+A typical transmit sequence would go as follows:
+a) The user generates a Start condition by setting
+the Start Enable (SEN) bit (SSPCON2 register).
+b) SSPIF is set. The MSSP module will wait the
+required start time before any other operation
+takes place.
+c) The user loads the SSPBUF with the address to
+transmit.
+d) Address is shifted out the SDA pin until all eight
+bits are transmitted.
+e) The MSSP module shifts in the ACK bit from the
+slave device and writes its value into the
+ACKSTAT bit (SSPCON2 register).
+f) The MSSP module generates an interrupt at the
+end of the ninth clock cycle by setting the SSPIF
+bit.
+g) The user loads the SSPBUF with eight bits of
+data.
+h) Data is shifted out the SDA pin until all eight bits
+are transmitted.
+i) The MSSP module shifts in the ACK bit from the
+slave device and writes its value into the
+ACKSTAT bit (SSPCON2 register).
+j) The MSSP module generates an interrupt at the
+end of the ninth clock cycle by setting the SSPIF
+bit.
+k) The user generates a Stop condition by setting
+the Stop Enable bit PEN (SSPCON2 register).
+l) Interrupt is generated once the Stop condition is
+complete.
+
+
+
+
+Pour l'initialisation du LCD, il faut des temporisations de 4 et 10 millisecondes (cf datasheets). Pour les définir, j'ai utilisé des temporisations par décrémentation de compteur. Pour définir les valeurs auxquelles initier les compteurs, j'ai calculé en fonction du nombre d'instructions la valeur à mettre et j'ai ensuite ajusté cette valeur avec les observations ) l'oscilloscope. videmment si on change la fréquence de l'oscillateur du PIC, ces temporisations ne sont plus valides.
+
+La partie LCD est celle où il y a les plus de fonctions -> attention à la stack limitée => l'intérêt aussi de ne pas rajouter une interruption dessus
