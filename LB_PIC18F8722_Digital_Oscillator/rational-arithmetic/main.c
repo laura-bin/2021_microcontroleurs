@@ -173,44 +173,44 @@ void main(void) {
     char text[21];
     double sampling_frequency, frequency, omega;
     double fB, fY0, fY1, fY2;   // floating-point signal values
-    
+
     // Compare mode: trigger special event
     CCP2CON = 0x0B;
-    
+
     // Timer3 OFF
     T3CON = 0x00;
-    
+
     // Timer1 prescale 1:1
     T1CON = 0x01;
-    
+
     // 250us -> 4kHz
     CCPR2H = 0x09;
     CCPR2L = 0xC4;
-    
+
     // Timer1 -> 0
     TMR1H = 0;
     TMR1L = 0;
-    
+
     // Control tick -> 0
     TICK_TRIS = 0;
     TICK = 0;
-    
+
     // LDAC -> 1
     DAC_LDAC_TRIS = 0;
     DAC_LDAC = 1;
-    
+
     // Frequency hexadecimal switch -> input
     FREQUENCY_TRIS = 0xFF;
-    
+
     // Sampling frequency -> 4kHz (single output, rational arithmetic)
     sampling_frequency = 4000.0;
-    
+
     // Frequency (max 1kHz, not effective with low frequencies)
     frequency = FREQUENCY * 10;
 
     // max value: 13
     exponent = 13;
-    
+
     // Initialization of the oscillator's variables
     omega = frequency / sampling_frequency * 2.0 * M_PI;
     fB = 2.0 * cos(omega);
@@ -226,7 +226,7 @@ void main(void) {
     Y1 = (signed long) ceil(fY1*pow(2.0, 10.0));
     Y2 = (signed long) ceil(fY2*pow(2.0, 10.0));
 
-    // 
+    // Compute Y2 scale to avoid floating-point arithmetic in the interruption
     Y2_scale = (signed long) ceil(pow(2.0, exponent));
 
     // SPI bus initialization
