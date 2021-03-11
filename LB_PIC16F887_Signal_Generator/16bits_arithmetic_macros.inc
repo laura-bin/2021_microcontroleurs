@@ -1,11 +1,10 @@
 ; 16 bits arithmetic macros in little endian format
 ; (LSB stored in VALUE and MSB in (VALUE)+1
-
+;
 ; ADD16 & SUB16: http://robotics.mcmanis.com/articles/20130117_pic_math.html
-
-
+;
 ; CMP16 needs REGA (2 bytes) to be declared
-
+; ==============================================================================
 
 
 ; Initialize a variable with a constant 16 bits value
