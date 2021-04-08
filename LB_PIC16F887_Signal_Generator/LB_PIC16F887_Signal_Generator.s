@@ -3,7 +3,9 @@
 ;
 ; v1:
 ;   - program structure with run/config modes
-;   - LCD connections
+;   - LCD connections 
+; v2:
+;   - 16 bits arithmetic
 ;
 ; PIC16F887 (4MHz clock - 1MHz/1us cycle)
 ; Proteus : LB_PIC16F887_Signal_Generator_v1
@@ -29,6 +31,8 @@ CONFIG CP=OFF		; Program memory unprotected
 
 #include <xc.inc>
 #include "config.inc"
+#include "16bits_arithmetic.inc"
+#include "16bits_bin_bcd_ascii.inc"
 
 #define MODE	    PORTC, 7	; RUN / CONFIG mode button
 
@@ -42,8 +46,15 @@ CONFIG CP=OFF		; Program memory unprotected
 ; =========
 PSECT udata_bank0
 ; Context saving variables
-w_temp:	DS 1
-s_temp:	DS 1
+w_temp:		DS 1
+status_temp:	DS 1
+; pclath_temp:	DS 1
+
+; Signal information
+; bit 0 : rising edge (1) - falling edge (0)
+
+signal_info:	DS 1
+#define	RISING_EDGE signal_info, 0
 
 ; Delay counters
 count1:	DS 1
@@ -52,6 +63,7 @@ count2:	DS 1
 ; Data displayed or command
 LCD_data:   DS 1
 
+period:	    DS 2
 
 ; Reset vector
 ; ============
@@ -64,33 +76,48 @@ reset_vec:
 ; ===================
 PSECT inter_vec, class=CODE, delta=2
 inter_vec:
-    ; Store w & status registers
+    ; Save w and STATUS registers
+    ; Swaps are used because they do not affect the status bits
     movwf   w_temp
     swapf   STATUS, w
-    movwf   s_temp
-    
+    movwf   status_temp
+    ;movf    PCLATH, w	;Only required if using pages 1, 2 and/or 3
+    ;movwf   pclath_temp	;Save PCLATH into W
+    ;clrf    PCLATH	;Page zero, regardless of current page
+
     ; tick
-    btfsc   TICK
+    btfsc   RISING_EDGE
     goto    tick_off
     goto    tick_on
 
 tick_off:
+    bcf	    RISING_EDGE
     bcf	    TICK
+    movlw   0x00
+    movwf   PORTD
     goto    end_inter
 
 tick_on:
-    bsf	    TICK
+    bsf	    RISING_EDGE
+    bcf	    TICK
+    movlw   0xFF
+    movwf   PORTD
     goto    end_inter
 
 end_inter:
     ; Clear interrupt flag
     bcf	    CCP2IF
     
-    ; Restore w & qtatus registers (& Bank Select Bit register)
-    swapf   s_temp
-    movwf   STATUS
-    swapf   w_temp, f
-    swapf   w_temp, w
+    ; Restore w and STATUS registers (& Bank Select Bit register)
+    ;movf    pclath_temp, w  ;Restore PCLATH
+    ;movf    pclath_temp, w  ;Restore PCLATH
+    ;movwf   PCLATH	    ;Move W into PCLATH
+    
+    swapf   status_temp, w  ;Swap STATUS_TEMP register into W
+    ;(sets bank to original state)
+    movwf   STATUS	    ; Move W into STATUS register
+    swapf   w_temp, f	    ;Swap W_TEMP
+    swapf   w_temp, w	    ;Swap W_TEMP into W
     retfie
 
 
@@ -102,13 +129,19 @@ init:
     ; PORTC -> output
     banksel TRISC
     clrf    TRISC
-    
+    ; PORTC -> output
+    banksel TRISD
+    clrf    TRISD
+
     ; RUN/CONFIG -> input
     bsf	    TRISC, 7
-    
+
     ; PORTC -> 0
     banksel PORTC
     clrf    PORTC
+    ; PORTC -> 0
+    banksel PORTD
+    clrf    PORTD
 
     ; I2C bus initialization
     ; ----------------------
@@ -184,13 +217,84 @@ init:
     clrf	TMR1H
     clrf	TMR1L
 
-    ; CCPR2H-L -> 500us (2kHz)
+    ; CCPR2H-L -> 250us (1kHz)
     banksel	CCPR2H
     movlw	0x01
     movwf	CCPR2H
-    movlw	0xF4
+    movlw	0xFA
     movwf	CCPR2L
 
+    movf	CCPR2L, w
+    movwf	period
+    
+    movf	CCPR2H, w
+    movwf	(period)+1
+    
+    movlw	'P'
+    movwf	LCD_data
+    call	send_char_LCD
+    movlw	'e'
+    movwf	LCD_data
+    call	send_char_LCD
+    movlw	'r'
+    movwf	LCD_data
+    call	send_char_LCD
+    movlw	'i'
+    movwf	LCD_data
+    call	send_char_LCD
+    movlw	'o'
+    movwf	LCD_data
+    call	send_char_LCD
+    movlw	'd'
+    movwf	LCD_data
+    call	send_char_LCD
+    movlw	' '
+    movwf	LCD_data
+    call	send_char_LCD
+    
+    movf	(period)+1, w
+    call	HEX_TO_ASCII
+    
+    movlw	LCD_LINE2
+    movwf	LCD_data
+    call	send_command_LCD
+    movf	HEX1, w
+    movwf	LCD_data
+    call	send_char_LCD
+    movf	HEX0, w
+    movwf	LCD_data
+    call	send_char_LCD
+    
+    movf	period, w
+    call	HEX_TO_ASCII
+    
+    movf	HEX1, w
+    movwf	LCD_data
+    call	send_char_LCD
+    movf	HEX0, w
+    movwf	LCD_data
+    call	send_char_LCD
+
+    movlw	' '
+    movwf	LCD_data
+    call	send_char_LCD
+    
+    movf	period, w
+    call	HEX8_TO_BCD_ASCII
+
+    movf	BCD2, w
+    movwf	LCD_data
+    call	send_char_LCD
+    movf	BCD1, w
+    movwf	LCD_data
+    call	send_char_LCD
+    movf	BCD0, w
+    movwf	LCD_data
+    call	send_char_LCD
+    
+    movlw	0x00
+    movwf	signal_info
+    
     ; RUN/CONFIG mode initialization
     ; ------------------------------
 
@@ -378,8 +482,8 @@ delay102:
     decfsz  count1, f
     goto    delay101
     return
-
-
+    
+;#include "16bits_bin_bcd.s"
 #include "I2C.s"
 
 ; End of ASM code
