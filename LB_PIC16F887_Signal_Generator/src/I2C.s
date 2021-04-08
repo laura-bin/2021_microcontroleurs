@@ -1,16 +1,26 @@
+
+
 #include <xc.inc>
+    
+; Functions
+; =========
+global	INIT_I2C	; I2C bus initialization
+global	START_I2C	; Sends the I2C start condition
+global	STOP_I2C	; Sends the I2C stop condition
+global	SEND_I2C	; Sends data using I2C bus
+global	IDLE_I2C	; Waits for the I2C bus to be available
 
 
-; I2C bus initialization
-; ======================
-init_I2C:
+PSECT code
+
+INIT_I2C:
     ; I2C high speed mode, all indicators -> 0
     banksel SSPSTAT
     clrf    SSPSTAT
 
     ; Baud rate: 400kHz
     banksel SSPADD
-    movlw   0x0A    ; replace by 01 ?
+    movlw   0x0A
     movwf   SSPADD
 
     ; I2C bus clock & data PINs -> input
@@ -34,11 +44,9 @@ init_I2C:
     return
 
 
-; Sends the I2C start condition
-; =============================
-start_I2C:
+START_I2C:
     ; Wait for the I2C to be available
-    call    idle_I2C
+    call    IDLE_I2C
 
     ; Clear the interrupt flag
     banksel PIR1
@@ -56,11 +64,9 @@ start_I2C:
     return
 
 
-; Sends the I2C stop condition
-; ============================
-stop_I2C:
+STOP_I2C:
     ; Wait for the I2C to be available
-    call    idle_I2C
+    call    IDLE_I2C
 
     ; Clear the interrupt flag
     banksel PIR1
@@ -78,11 +84,9 @@ stop_I2C:
     return
 
 
-; Sends data using I2C bus
-; ========================
-send_I2C:
+SEND_I2C:
     ; Wait for the I2C to be available
-    call    idle_I2C
+    call    IDLE_I2C
 
     ; Clear the interrupt flag
     banksel PIR1
@@ -99,21 +103,19 @@ send_I2C:
     return
 
 
-; Waits for the I2C bus to be available
-; =====================================
-idle_I2C:
+IDLE_I2C:
     banksel SSPCON2
-idle:
+IDLE:
     btfsc   R_W		; Transmit is in progress
-    goto    idle
+    goto    IDLE
     btfsc   SEN		; Start condition enabled
-    goto    idle
+    goto    IDLE
     btfsc   RSEN	; Repeated start condition enabled
-    goto    idle
+    goto    IDLE
     btfsc   PEN		; Stop condition enabled
-    goto    idle
+    goto    IDLE
     btfsc   RCEN	; Receive enabled (not used here)
-    goto    idle
+    goto    IDLE
     btfsc   ACKEN	; Acknowledgement sequence enabled (not used here)
-    goto    idle
+    goto    IDLE
     return

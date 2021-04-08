@@ -30,9 +30,11 @@ CONFIG PWRTE=OFF 	; PWRT disabled
 CONFIG CP=OFF		; Program memory unprotected
 
 #include <xc.inc>
-#include "config.inc"
 #include "16bits_arithmetic.inc"
 #include "16bits_bin_bcd_ascii.inc"
+#include "config.inc"
+#include "I2C.inc"
+#include "LM044L_PCA9535.inc"
 
 #define MODE	    PORTC, 7	; RUN / CONFIG mode button
 
@@ -56,12 +58,6 @@ status_temp:	DS 1
 signal_info:	DS 1
 #define	RISING_EDGE signal_info, 0
 
-; Delay counters
-count1:	DS 1
-count2:	DS 1
-
-; Data displayed or command
-LCD_data:   DS 1
 
 period:	    DS 2
 
@@ -146,60 +142,9 @@ init:
     ; I2C bus initialization
     ; ----------------------
 
-    call	init_I2C
-
-    ; PCA9535 I/0 expander initialization
-    ; -----------------------------------
-
-    call    start_I2C
-    movlw   PCA_LCD_ADD
-    call    send_I2C
-
-    ; PORT0-1 -> output
-    movlw   PCA_PORT0_CONFIG
-    call    send_I2C
-    movlw   0x00
-    call    send_I2C
-    call    send_I2C
-
-    ; PORT0-1 -> 0
-    movlw   PCA_PORT0_OUT
-    call    send_I2C
-    movlw   0x00
-    call    send_I2C
-    call    send_I2C
-
-    call    stop_I2C
-
-    ; LM044L alphanumeric LCD initialization
-    ; --------------------------------------
-
-    ; Initialize the LCD in 8 bits
-    movlw	0x38
-    movwf	LCD_data
-    call	send_command_LCD
-
-    call	delay_4ms
-
-    ; Initialize the LCD cursor
-    movlw	CURSOR_OFF
-    movwf	LCD_data
-    call	send_command_LCD
-
-    ; Writing from left to right
-    movlw	0x06
-    movwf	LCD_data
-    call	send_command_LCD
-
-    ; Clear the LCD
-    movlw	LCD_CLEAR
-    movwf	LCD_data
-    call	send_command_LCD
-
-    ; Place the cursor on the first line
-    movlw	LCD_LINE1
-    movwf	LCD_data
-    call	send_command_LCD
+    call    INIT_I2C
+    call    INIT_PCA9535
+    call    INIT_LM044L
 
     ; Compare module initialization
     ; -----------------------------
@@ -231,66 +176,66 @@ init:
     movwf	(period)+1
     
     movlw	'P'
-    movwf	LCD_data
-    call	send_char_LCD
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
     movlw	'e'
-    movwf	LCD_data
-    call	send_char_LCD
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
     movlw	'r'
-    movwf	LCD_data
-    call	send_char_LCD
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
     movlw	'i'
-    movwf	LCD_data
-    call	send_char_LCD
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
     movlw	'o'
-    movwf	LCD_data
-    call	send_char_LCD
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
     movlw	'd'
-    movwf	LCD_data
-    call	send_char_LCD
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
     movlw	' '
-    movwf	LCD_data
-    call	send_char_LCD
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
     
     movf	(period)+1, w
     call	HEX_TO_ASCII
     
     movlw	LCD_LINE2
-    movwf	LCD_data
-    call	send_command_LCD
+    movwf	LCD_DATA
+    call	SEND_COMMAND_LCD
     movf	HEX1, w
-    movwf	LCD_data
-    call	send_char_LCD
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
     movf	HEX0, w
-    movwf	LCD_data
-    call	send_char_LCD
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
     
     movf	period, w
     call	HEX_TO_ASCII
     
     movf	HEX1, w
-    movwf	LCD_data
-    call	send_char_LCD
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
     movf	HEX0, w
-    movwf	LCD_data
-    call	send_char_LCD
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
 
     movlw	' '
-    movwf	LCD_data
-    call	send_char_LCD
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
     
     movf	period, w
     call	HEX8_TO_BCD_ASCII
 
     movf	BCD2, w
-    movwf	LCD_data
-    call	send_char_LCD
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
     movf	BCD1, w
-    movwf	LCD_data
-    call	send_char_LCD
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
     movf	BCD0, w
-    movwf	LCD_data
-    call	send_char_LCD
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
     
     movlw	0x00
     movwf	signal_info
@@ -341,11 +286,11 @@ set_run_mode:
 
     ; set LCD (send character to the last position of the first line)
     movlw	0x93
-    movwf	LCD_data
-    call	send_command_LCD
+    movwf	LCD_DATA
+    call	SEND_COMMAND_LCD
     movlw	'R'
-    movwf	LCD_data
-    call	send_char_LCD
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
 
     ; set CCP2 interruption
     banksel	PIE2
@@ -370,121 +315,16 @@ set_config_mode:
 
     ; set LCD (send character to the last position of the first line)
     movlw	0x93
-    movwf	LCD_data
-    call	send_command_LCD
+    movwf	LCD_DATA
+    call	SEND_COMMAND_LCD
     movlw	'C'
-    movwf	LCD_data
-    call	send_char_LCD
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
     return
 
 
-; Sends a character to the LCD
-; ============================
-send_char_LCD:
-    ; Send the data with RS -> 1 & E -> 0
-    call    start_I2C
-    movlw   PCA_LCD_ADD
-    call    send_I2C
-    movlw   PCA_PORT0_OUT
-    call    send_I2C
-    movlw   LCD_RS
-    call    send_I2C
-    movf    LCD_data, w
-    call    send_I2C
-    call    stop_I2C
-
-    ; Rising edge on the LCD Enable PIN
-    call    start_I2C
-    movlw   PCA_LCD_ADD
-    call    send_I2C
-    movlw   PCA_PORT0_OUT
-    call    send_I2C
-    movlw   LCD_RS_E
-    call    send_I2C
-    call    stop_I2C
-
-    call    start_I2C
-    movlw   PCA_LCD_ADD
-    call    send_I2C
-    movlw   PCA_PORT0_OUT
-    call    send_I2C
-    movlw   LCD_RS
-    call    send_I2C
-    call    stop_I2C
-
-    return
 
 
-; Sends a command to the LCD
-; ==========================
-send_command_LCD:
-    ; Send the command with RS -> 0 & E -> 0
-    call    start_I2C
-    movlw   PCA_LCD_ADD
-    call    send_I2C
-    movlw   PCA_PORT0_OUT
-    call    send_I2C
-    movlw   0x00
-    call    send_I2C
-    movf    LCD_data, w
-    call    send_I2C
-    call    send_I2C
-    call    stop_I2C
-
-    ; Rising edge on the LCD Enable PIN
-    call    start_I2C
-    movlw   PCA_LCD_ADD
-    call    send_I2C
-    movlw   PCA_PORT0_OUT
-    call    send_I2C
-    movlw   LCD_E
-    call    send_I2C
-    call    stop_I2C
-
-    call    start_I2C
-    movlw   PCA_LCD_ADD
-    call    send_I2C
-    movlw   PCA_PORT0_OUT
-    call    send_I2C
-    movlw   0x00
-    call    send_I2C
-    call    stop_I2C
-
-    return
-
-
-; 4 milliseconds delay
-; ====================
-delay_4ms:
-    movlw   0x08
-    movwf   count1
-delay41:
-    movlw   0xA4
-    movwf   count2
-delay42:
-    decfsz  count2, f
-    goto    delay42
-    decfsz  count1, f
-    goto    delay41
-    return
-
-; 10 milliseconds delay
-; =====================
-delay_10ms:
-    movlw   0x15
-    movwf   count1
-delay101:
-    movlw   0x9E
-    movwf   count2
-delay102:
-    decfsz  count2, f
-    goto    delay102
-    decfsz  count1, f
-    goto    delay101
-    return
-    
-;#include "16bits_bin_bcd.s"
-#include "I2C.s"
 
 ; End of ASM code
 ; ===============
