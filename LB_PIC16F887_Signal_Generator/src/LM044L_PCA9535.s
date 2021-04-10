@@ -27,18 +27,18 @@ PSECT code
 
 INIT_PCA9535:
     call    START_I2C
-    movlw   PCA_LCD_ADD
+    movlw   PCA9535_LCD_ADD_W
     call    SEND_I2C
 
     ; PORT0-1 -> output
-    movlw   PCA_PORT0_CONFIG
+    movlw   PCA9535_PORT0_CONFIG
     call    SEND_I2C
     movlw   0x00
     call    SEND_I2C
     call    SEND_I2C
 
     ; PORT0-1 -> 0
-    movlw   PCA_PORT0_OUT
+    movlw   PCA9535_PORT0_OUT
     call    SEND_I2C
     movlw   0x00
     call    SEND_I2C
@@ -83,9 +83,9 @@ INIT_LM044L:
 SEND_CHAR_LCD:
     ; Send the data with RS -> 1 & E -> 0
     call    START_I2C
-    movlw   PCA_LCD_ADD
+    movlw   PCA9535_LCD_ADD_W
     call    SEND_I2C
-    movlw   PCA_PORT0_OUT
+    movlw   PCA9535_PORT0_OUT
     call    SEND_I2C
     movlw   LCD_RS
     call    SEND_I2C
@@ -95,18 +95,18 @@ SEND_CHAR_LCD:
 
     ; Rising edge on the LCD Enable PIN
     call    START_I2C
-    movlw   PCA_LCD_ADD
+    movlw   PCA9535_LCD_ADD_W
     call    SEND_I2C
-    movlw   PCA_PORT0_OUT
+    movlw   PCA9535_PORT0_OUT
     call    SEND_I2C
     movlw   LCD_RS_E
     call    SEND_I2C
     call    STOP_I2C
 
     call    START_I2C
-    movlw   PCA_LCD_ADD
+    movlw   PCA9535_LCD_ADD_W
     call    SEND_I2C
-    movlw   PCA_PORT0_OUT
+    movlw   PCA9535_PORT0_OUT
     call    SEND_I2C
     movlw   LCD_RS
     call    SEND_I2C
@@ -118,9 +118,9 @@ SEND_CHAR_LCD:
 SEND_COMMAND_LCD:
     ; Send the command with RS -> 0 & E -> 0
     call    START_I2C
-    movlw   PCA_LCD_ADD
+    movlw   PCA9535_LCD_ADD_W
     call    SEND_I2C
-    movlw   PCA_PORT0_OUT
+    movlw   PCA9535_PORT0_OUT
     call    SEND_I2C
     movlw   0x00
     call    SEND_I2C
@@ -131,18 +131,18 @@ SEND_COMMAND_LCD:
 
     ; Rising edge on the LCD Enable PIN
     call    START_I2C
-    movlw   PCA_LCD_ADD
+    movlw   PCA9535_LCD_ADD_W
     call    SEND_I2C
-    movlw   PCA_PORT0_OUT
+    movlw   PCA9535_PORT0_OUT
     call    SEND_I2C
     movlw   LCD_E
     call    SEND_I2C
     call    STOP_I2C
 
     call    START_I2C
-    movlw   PCA_LCD_ADD
+    movlw   PCA9535_LCD_ADD_W
     call    SEND_I2C
-    movlw   PCA_PORT0_OUT
+    movlw   PCA9535_PORT0_OUT
     call    SEND_I2C
     movlw   0x00
     call    SEND_I2C

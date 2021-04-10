@@ -34,6 +34,7 @@ CONFIG CP=OFF		; Program memory unprotected
 #include "16bits_bin_bcd_ascii.inc"
 #include "config.inc"
 #include "I2C.inc"
+#include "KEYPAD_PCA9554.inc"
 #include "LM044L_PCA9535.inc"
 
 #define MODE	    PORTC, 7	; RUN / CONFIG mode button
@@ -81,6 +82,17 @@ inter_vec:
     ;movwf   pclath_temp	;Save PCLATH into W
     ;clrf    PCLATH	;Page zero, regardless of current page
 
+    btfss   INTF
+    goto    generate_signal
+    goto    read_keyboard
+
+read_keyboard:
+    btfss   PORTC, 5
+    bsf	    PORTC, 5
+    bcf	    PORTC, 5
+    goto    end_inter
+    
+generate_signal:
     ; tick
     btfsc   RISING_EDGE
     goto    tick_off
@@ -98,10 +110,11 @@ tick_on:
     bcf	    TICK
     movlw   0xFF
     movwf   PORTD
-    goto    end_inter
+    goto    end_inter 
 
 end_inter:
     ; Clear interrupt flag
+    bcf	    INTF
     bcf	    CCP2IF
     
     ; Restore w and STATUS registers (& Bank Select Bit register)
@@ -145,6 +158,7 @@ init:
     call    INIT_I2C
     call    INIT_PCA9535
     call    INIT_LM044L
+    call    INIT_PCA9554
 
     ; Compare module initialization
     ; -----------------------------
@@ -280,6 +294,11 @@ scan_inputs:
     goto	main
     
 set_run_mode:
+    ; disable other interruptions
+    banksel	INTCON
+    bcf		GIE
+    bcf		INTE
+    
     ; set LEDs
     bsf		LED_RUN
     bcf		LED_CONFIG
@@ -302,7 +321,7 @@ set_run_mode:
     return
 
 set_config_mode:
-    ; stop interruptions
+    ; disable other interruptions
     banksel	PIE2
     bcf		CCP2IE	    ; Enable CCP2 interruptions
     banksel	INTCON
@@ -320,6 +339,13 @@ set_config_mode:
     movlw	'C'
     movwf	LCD_DATA
     call	SEND_CHAR_LCD
+    
+    ; enable interruption on RB0
+    banksel	INTCON
+    bcf		INTF
+    bsf		INTE
+    bsf		GIE
+    
     return
 
 
