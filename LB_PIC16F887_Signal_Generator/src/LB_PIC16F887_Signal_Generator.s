@@ -25,7 +25,7 @@ PROCESSOR 16F887
 ; Configuration words
 ; ===================
 CONFIG FOSC=HS		; HS Oscillator
-CONFIG WDTE=OFF 	; Watchdog timer disabled
+CONFIG WDTE=OFF		; Watchdog timer disabled
 CONFIG PWRTE=OFF 	; PWRT disabled
 CONFIG CP=OFF		; Program memory unprotected
 
@@ -36,13 +36,7 @@ CONFIG CP=OFF		; Program memory unprotected
 #include "I2C.inc"
 #include "KEYPAD_PCA9554.inc"
 #include "LM044L_PCA9535.inc"
-
-#define MODE	    PORTC, 7	; RUN / CONFIG mode button
-
-#define LED_RUN	    PORTC, 0
-#define LED_CONFIG  PORTC, 1
-    
-#define TICK	    PORTC, 2
+#include "delay.inc"
 
 
 ; Variables
@@ -55,12 +49,92 @@ status_temp:	DS 1
 
 ; Signal information
 ; bit 0 : rising edge (1) - falling edge (0)
-
 signal_info:	DS 1
 #define	RISING_EDGE signal_info, 0
 
-
 period:	    DS 2
+    
+i:  DS 1
+rising_inc: DS 1
+falling_inc: DS 1
+dir: DS 1 ; sens de l'increment
+cpt: DS 1   ; nombre constant d'increments
+signal: DS 1	;valeur courante du signal
+rising_steps: DS 1  ; nombre de pas du front montant
+falling_steps: DS 1  ; nombre de pas du front descendant
+samples:	DS 1	; nombre total d'echantillons -> samples
+v1: DS 1    ; data send by keypad
+v2: DS 1    ; previous v1
+frequency: DS 2	; signal frequency
+duty_cycle: DS 1    ; sugnal duty cycle
+wave_form:  DS 1    ; signal wave form (square, triangle or sawtooth)
+amplitude: DS 1	    ; signal amplitude
+app_mode: DS 1	    ; app mode char / mode RUN (1) or config (0)
+
+PSECT udata_bank1
+signal_low: DS 50	; signal data vector (low values)
+
+PSECT udata_bank2
+signal_high: DS 50	; signal data vector (high values)
+
+    
+    
+    
+    
+; sert a cacher al séparation du tableau en 2 (en pas répéter l'alternative)
+; macro car on ne perd pas les 4 cycles machines d'office du call
+; get the element of the array at given index
+GET_SIGNAL  MACRO   INDEX
+LOCAL GET_SIGNAL_HIGH		    ; LOCAL ensures the uniqueness of the labels defined in the macro 
+LOCAL GET_SIGNAL_END		    ; (a unique tag is added to the label address)
+    movlw   50
+    subwf   (INDEX), w  
+    btfsc   CARRY		    ; if counter is greater than 50
+    goto    GET_SIGNAL_HIGH	    ; goto the high half of the array (in bank 2)
+    bcf	    STATUS, 7		    ; clear IRP to select bank 1
+    movlw   signal_low		    ; move the array pointer value
+    movwf   FSR			    ; to FSR
+    movf    (INDEX), w
+    addwf   FSR, f		    ; add the index value to the pointer
+    movf    INDF, w		    ; move the data at this position to the W register
+    goto    GET_SIGNAL_END
+GET_SIGNAL_HIGH:
+    bsf	    STATUS, 7		    ; set IRP to select bank 2
+    movlw   BANKMASK(signal_high)   ; get the correct pointer on the array (7bits -> 8bits)
+    movwf   FSR			    ; and move it to FSR
+    movlw   50
+    subwf   (INDEX), w		    ; remove 50 from the index value
+    addwf   FSR, f		    ; add the index value to the pointer
+    movf    INDF, w		    ; move the data at this position to the W register
+GET_SIGNAL_END:
+ENDM
+    
+SET_SIGNAL  MACRO   CPT, VAL
+LOCAL SET_SIG1
+LOCAL SET_SIG2
+    movlw   50
+    subwf   CPT, w
+    btfsc   CARRY
+    goto    SET_SIG1
+    bcf	    STATUS, 7
+    movlw   tsig1
+    movwf   FSR
+    movf    CPT, w
+    addwf   FSR, f
+    movf    VAL, w
+    movwf   INDF
+    goto    SET_SIG2
+SET_SIG1:
+    bsf	    STATUS, 7
+    movlw   BANKMASK(tsig2)
+    movwf   FSR
+    movlw   50
+    subwf   CPT, w
+    addwf   FSR, f
+    movf    VAL, w
+    movwf   INDF
+SET_SIG2:
+ENDM
 
 ; Reset vector
 ; ============
@@ -68,28 +142,41 @@ PSECT reset_vec, class=CODE, delta=2
 reset_vec:
     goto    init
 
-
 ; Interruption vector
 ; ===================
 PSECT inter_vec, class=CODE, delta=2
 inter_vec:
-    ; Save w and STATUS registers
-    ; Swaps are used because they do not affect the status bits
+    ; save w and STATUS registers
+    ; swaps are used because they do not affect the status bits
     movwf   w_temp
     swapf   STATUS, w
     movwf   status_temp
-    ;movf    PCLATH, w	;Only required if using pages 1, 2 and/or 3
-    ;movwf   pclath_temp	;Save PCLATH into W
-    ;clrf    PCLATH	;Page zero, regardless of current page
+    ; uncomment if PCLATH register is used
+    ;movf    PCLATH, w
+    ;movwf   pclath_temp
+    ;clrf    PCLATH
+    
+    GET_SIGNAL	cpt
+    
+    movwf   DAC0808
+    incf    cpt, f
+    movf    samples, w
+    subwf   cpt, w
+    btfsc   ZERO
+    clrf    cpt
+    goto    end_inter
 
     btfss   INTF
     goto    generate_signal
     goto    read_keyboard
 
 read_keyboard:
+    bsf	    PORTA, 0
     btfss   PORTC, 5
     bsf	    PORTC, 5
     bcf	    PORTC, 5
+    
+    call	READ_PCA9554
     goto    end_inter
     
 generate_signal:
@@ -100,14 +187,12 @@ generate_signal:
 
 tick_off:
     bcf	    RISING_EDGE
-    bcf	    TICK
     movlw   0x00
     movwf   PORTD
     goto    end_inter
 
 tick_on:
     bsf	    RISING_EDGE
-    bcf	    TICK
     movlw   0xFF
     movwf   PORTD
     goto    end_inter 
@@ -136,6 +221,9 @@ PSECT code
 ; ==================
 init:
     ; PORTC -> output
+    banksel TRISA
+    clrf    TRISA
+    ; PORTC -> output
     banksel TRISC
     clrf    TRISC
     ; PORTC -> output
@@ -145,6 +233,10 @@ init:
     ; RUN/CONFIG -> input
     bsf	    TRISC, 7
 
+    ; PORTC -> 0
+    banksel PORTA
+    movlw   0x00
+    movwf   PORTA
     ; PORTC -> 0
     banksel PORTC
     clrf    PORTC
@@ -176,11 +268,10 @@ init:
     clrf	TMR1H
     clrf	TMR1L
 
-    ; CCPR2H-L -> 250us (1kHz)
+    ; CCPR2H-L -> 50*Tcy(0.2us) -> 10us (100kHz)
     banksel	CCPR2H
-    movlw	0x01
-    movwf	CCPR2H
-    movlw	0xFA
+    clrf	CCPR2H
+    movlw	50
     movwf	CCPR2L
 
     movf	CCPR2L, w
@@ -188,71 +279,8 @@ init:
     
     movf	CCPR2H, w
     movwf	(period)+1
-    
-    movlw	'P'
-    movwf	LCD_DATA
-    call	SEND_CHAR_LCD
-    movlw	'e'
-    movwf	LCD_DATA
-    call	SEND_CHAR_LCD
-    movlw	'r'
-    movwf	LCD_DATA
-    call	SEND_CHAR_LCD
-    movlw	'i'
-    movwf	LCD_DATA
-    call	SEND_CHAR_LCD
-    movlw	'o'
-    movwf	LCD_DATA
-    call	SEND_CHAR_LCD
-    movlw	'd'
-    movwf	LCD_DATA
-    call	SEND_CHAR_LCD
-    movlw	' '
-    movwf	LCD_DATA
-    call	SEND_CHAR_LCD
-    
-    movf	(period)+1, w
-    call	HEX_TO_ASCII
-    
-    movlw	LCD_LINE2
-    movwf	LCD_DATA
-    call	SEND_COMMAND_LCD
-    movf	HEX1, w
-    movwf	LCD_DATA
-    call	SEND_CHAR_LCD
-    movf	HEX0, w
-    movwf	LCD_DATA
-    call	SEND_CHAR_LCD
-    
-    movf	period, w
-    call	HEX_TO_ASCII
-    
-    movf	HEX1, w
-    movwf	LCD_DATA
-    call	SEND_CHAR_LCD
-    movf	HEX0, w
-    movwf	LCD_DATA
-    call	SEND_CHAR_LCD
 
-    movlw	' '
-    movwf	LCD_DATA
-    call	SEND_CHAR_LCD
-    
-    movf	period, w
-    call	HEX8_TO_BCD_ASCII
 
-    movf	BCD2, w
-    movwf	LCD_DATA
-    call	SEND_CHAR_LCD
-    movf	BCD1, w
-    movwf	LCD_DATA
-    call	SEND_CHAR_LCD
-    movf	BCD0, w
-    movwf	LCD_DATA
-    call	SEND_CHAR_LCD
-    
-    movlw	0x00
-    movwf	signal_info
     
     ; RUN/CONFIG mode initialization
     ; ------------------------------
@@ -350,7 +378,367 @@ set_config_mode:
 
 
 
+init_signal:
+    ; frequency -> 1000
+    INIT16  frequency, 1000
+    
+    ; wave form -> square
+    movlw   'S'
+    movwf   wave_form
+    
+    ; duty cycle -> 50%
+    movlw   50
+    movwf   duty_cycle
+    
+    ; amplitude -> 100%
+    movlw   100
+    movwf   amplitude
+    
+    ; mode -> run
+    movlw   'R'
+    movwf   app_mode
 
+
+; Parameters display initialization
+; =================================
+init_display:
+    movlw	LCD_LINE1
+    movwf	LCD_DATA
+    call	SEND_COMMAND_LCD
+    movlw	'S'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	'I'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	'G'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	'N'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	'A'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	'L'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+
+    movlw	LCD_LINE2
+    movwf	LCD_DATA
+    call	SEND_COMMAND_LCD
+    movlw	'W'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	'a'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	'v'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	'e'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	' '
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	'f'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	'o'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	'r'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	'm'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+
+    movlw	LCD_LINE3
+    movwf	LCD_DATA
+    call	SEND_COMMAND_LCD
+    movlw	'F'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	'r'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	'e'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	'q'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	'u'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	'e'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	'n'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	'c'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	'y'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+
+    movlw	0xA6
+    movwf	LCD_DATA
+    call	SEND_COMMAND_LCD
+    movlw	'H'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	'z'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+
+    movlw	LCD_LINE4
+    movwf	LCD_DATA
+    call	SEND_COMMAND_LCD
+    movlw	'D'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	'u'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	't'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	'y'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	' '
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	'c'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	'y'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	'c'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	'l'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	'e'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+
+    movlw	0xE7
+    movwf	LCD_DATA
+    call	SEND_COMMAND_LCD
+    movlw	'%'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    return
+
+; displays the mode config
+; ========================
+display_config_mode:
+    movlw	0x87
+    movwf	LCD_DATA
+    call	SEND_COMMAND_LCD
+    movlw	'C'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	'O'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	'N'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	'F'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	'I'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	'G'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	'U'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	'R'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	'A'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	'T'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	'I'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	'O'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	'N'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    return
+
+; displays the mode run
+; =====================
+display_run_mode:
+    movlw	0x87
+    movwf	LCD_DATA
+    call	SEND_COMMAND_LCD
+    movlw	'G'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	'E'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	'N'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	'E'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	'R'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	'A'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	'T'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	'I'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	'O'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	'N'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	' '
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	' '
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	' '
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    return
+
+; displays the wave form traingle
+; ===============================
+display_wave_form_triangle:
+    movlw	0xCC
+    movwf	LCD_DATA
+    call	SEND_COMMAND_LCD
+    movlw	't'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	'r'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	'i'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	'a'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	'n'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	'g'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	'l'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	'e'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    return
+
+; displays the wave form square
+; =============================
+display_wave_form_square:
+    movlw	0xCC
+    movwf	LCD_DATA
+    call	SEND_COMMAND_LCD
+    movlw	' '
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	' '
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	's'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	'q'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	'u'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	'a'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	'r'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	'e'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    return
+
+; displays the frequency
+; ======================
+display_frequency:
+    MOV16	VAR16, frequency
+    call	HEX16_TO_BCD_ASCII
+    movlw	0xA1
+    movwf	LCD_DATA
+    call	SEND_COMMAND_LCD
+    movf	BCD4, w
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movf	BCD3, w
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movf	BCD2, w
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movf	BCD1, w
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movf	BCD0, w
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    return
+
+; displays the duty cycle
+; =======================
+display_duty_cycle:
+    movf	duty_cycle, w
+    call	HEX8_TO_BCD_ASCII
+    movlw	0xE4
+    movwf	LCD_DATA
+    call	SEND_COMMAND_LCD
+    movf	BCD2, w
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movf	BCD1, w
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movf	BCD0, w
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    return
 
 ; End of ASM code
 ; ===============
