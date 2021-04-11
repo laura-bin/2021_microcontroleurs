@@ -4,7 +4,8 @@
     
 ; Functions
 ; =========
-global DELAY_4100us	; 4.1 milli seconds delay
+global DELAY_10ms	; 10 milli seconds delay
+global DELAY_40us	; 40 micro seconds delay
 
 
 ; Variables
@@ -17,15 +18,24 @@ count2:	    DS 1
 
 PSECT code
 
-DELAY_4100us:
-    movlw   0x43
+DELAY_10ms:
+    movlw   0xA4
     movwf   count1
-DELAY41:
-    movlw   0x65
+DELAY101:
+    movlw   0x64
     movwf   count2
-DELAY42:
+DELAY102:
     decfsz  count2, f
-    goto    DELAY42
+    goto    DELAY102
     decfsz  count1, f
-    goto    DELAY41
+    goto    DELAY101
+    return
+
+
+DELAY_40us:
+    movlw   0x40
+    movwf   count1
+DELAY401:
+    decfsz  count1, f
+    goto    DELAY401
     return
