@@ -55,7 +55,7 @@ INIT_LM044L:
     movwf	LCD_DATA
     call	SEND_COMMAND_LCD
 
-    call	DELAY_4ms
+    call	DELAY_4100us
 
     ; Initialize the LCD cursor
     movlw	CURSOR_OFF
@@ -147,5 +147,7 @@ SEND_COMMAND_LCD:
     movlw   0x00
     call    SEND_I2C
     call    STOP_I2C
+    
+    call    DELAY_4100us
 
     return
