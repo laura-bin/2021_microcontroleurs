@@ -38,6 +38,14 @@ CONFIG CP=OFF		; Program memory unprotected
 #include "LM044L_PCA9535.inc"
 #include "delay.inc"
 
+#define	AMPL_UP		KEYPAD_DATA, 6
+#define	AMPL_DOWN	KEYPAD_DATA, 5
+#define	DC_UP		KEYPAD_DATA, 4
+#define	DC_DOWN		KEYPAD_DATA, 3
+#define	FREQ_UP		KEYPAD_DATA, 2
+#define	FREQ_DOWN	KEYPAD_DATA, 1
+#define	NEXT_WAVE_FORM	KEYPAD_DATA, 0
+
 
 ; Variables
 ; =========
@@ -54,6 +62,16 @@ signal_info:	DS 1
 #define	PREV_MODE   signal_info, 1	    ; (1) run mode - (0) config mode	
 
 period:	    DS 2
+
+
+; signal parameters:
+amplitude:		DS 1
+duty_cycle:		DS 1
+frequency:		DS 2
+wave_form:		DS 1    ; (square, triangle or sawtooth)
+#define WF_SQUARE	wave_form, 1
+#define WF_TRIANGLE	wave_form, 0
+
     
 i:  DS 1
 rising_inc: DS 1
@@ -66,12 +84,6 @@ falling_steps: DS 1  ; nombre de pas du front descendant
 samples:	DS 1	; nombre total d'echantillons -> samples
 v1: DS 1    ; data send by keypad
 v2: DS 1    ; previous v1
-frequency: DS 2	; signal frequency
-duty_cycle: DS 1    ; sugnal duty cycle
-wave_form:  DS 1    ; signal wave form (square, triangle or sawtooth)
-#define WF_SQUARE   wave_form, 1
-#define WF_TRIANGLE wave_form, 0
-amplitude: DS 1	    ; signal amplitude
 app_mode: DS 1	    ; app mode char / mode RUN (1) or config (0)
 
 PSECT udata_bank1
@@ -159,48 +171,55 @@ inter_vec:
     ;movwf   pclath_temp
     ;clrf    PCLATH
     
-    GET_SIGNAL	cpt
+    bsf	    LED_CONFIG
     
-    movwf   DAC0808
-    incf    cpt, f
-    movf    samples, w
-    subwf   cpt, w
-    btfsc   ZERO
-    clrf    cpt
-    goto    end_inter
-
-    btfss   INTF
+    btfsc   CCP2IF
     goto    generate_signal
-    goto    read_keyboard
-
-read_keyboard:
-    bsf	    PORTA, 0
-    btfss   PORTC, 5
-    bsf	    PORTC, 5
-    bcf	    PORTC, 5
+    goto    read_inputs
     
-    call	READ_PCA9554
+;    GET_SIGNAL	cpt
+;    
+;    movwf   DAC0808
+;    incf    cpt, f
+;    movf    samples, w
+;    subwf   cpt, w
+;    btfsc   ZERO
+;    clrf    cpt
+;    goto    end_inter
+
+
+read_inputs:
+    call    READ_PCA9554
+    btfss   AMPL_UP
+    call    set_amplitude_up
+    btfss   AMPL_DOWN
+    call    set_amplitude_down
+    btfss   DC_UP
+    call    set_duty_cycle_up
+    btfss   DC_DOWN
+    call    set_duty_cycle_down
+    btfss   FREQ_UP
+    call    set_frequency_up
+    btfss   FREQ_DOWN
+    call    set_frequency_down
+    btfss   NEXT_WAVE_FORM
+    call    set_next_wave_form
+
+
+    ;call	READ_PCA9554
+    bcf	    INTF
     goto    end_inter
     
 generate_signal:
-    ; tick
-    goto    tick_off
-    goto    tick_on
-
-tick_off:
-    movlw   0x00
-    movwf   PORTD
-    goto    end_inter
-
-tick_on:
-    movlw   0xFF
-    movwf   PORTD
+    btfss   PORTC, 5
+    bsf	    PORTC, 5
+    btfsc   PORTC, 5
+    bcf	    PORTC, 5
+    bcf	    CCP2IF
     goto    end_inter 
 
 end_inter:
     ; Clear interrupt flag
-    bcf	    INTF
-    bcf	    CCP2IF
     
     ; Restore w and STATUS registers (& Bank Select Bit register)
     ;movf    pclath_temp, w  ;Restore PCLATH
@@ -229,9 +248,19 @@ init:
     ; PORTC -> output
     banksel TRISD
     clrf    TRISD
+    
+    banksel TRISB
+    bsf	    TRISB, 0
 
     ; RUN/CONFIG -> input
     bsf	    TRISC, 7
+
+    ; PORTB -> digital
+    banksel	ANSELH
+    clrf	ANSELH
+    
+    banksel	OPTION_REG
+    bcf		INTEDG
 
     ; PORTC -> 0
     banksel PORTA
@@ -273,37 +302,21 @@ init:
     clrf	CCPR2H
     movlw	50
     movwf	CCPR2L
-    movlw	1
-    movwf	CCPR2H
-
-
     
     ; init parameters
-    
-    ; init wave form to square
-    clrf    wave_form
-    bsf	    WF_SQUARE
-    
-    ; init period
-    movf	CCPR2L, w
-    movwf	period
-    movf	CCPR2H, w
-    movwf	(period)+1
-    
     ; compute the frequency
     INIT16	OP1, 5000
     MOV16	OP2, CCPR2L
     call	DIV16
     MOV16	frequency, RESULT
-    
-    ; init duty cycle
-    movlw	50
-    movwf	duty_cycle
-    
+
+    call	init_parameters
+
     call	init_display
     call	display_wave_form
     call	display_frequency
     call	display_duty_cycle
+    call	display_amplitude
     
     ; RUN/CONFIG mode initialization
     ; ------------------------------
@@ -313,6 +326,7 @@ init:
     btfss	MODE
     call	init_mode_config
 
+
 ; Main loop: RUN/CONFIG button polling
 ; ====================================
 main:
@@ -321,41 +335,22 @@ main:
     goto	signal_config
     goto	signal_gen
 
-; Run mode : set interruption and generate the signal
-; ===================================================
-run_mode:
-    btfsc	LED_CONFIG
-    call	set_run_mode
-    goto	main
-    
-; Config mode : read the inputs to configure the signal
-; =====================================================
-config_mode:
-    btfsc	LED_RUN
-    call	set_config_mode
-scan_inputs:
-    nop
-    nop
-    nop
-    goto	main
-    
-set_run_mode:
+
+signal_gen:
+    btfss   PREV_MODE
+    call    init_mode_run
+    goto    main
+
+init_mode_run:
     ; disable other interruptions
     banksel	INTCON
-    bcf		GIE
-    bcf		INTE
-    
-    ; set LEDs
-    bsf		LED_RUN
-    bcf		LED_CONFIG
+    clrf	INTCON
 
-    ; set LCD (send character to the last position of the first line)
-    movlw	0x93
-    movwf	LCD_DATA
-    call	SEND_COMMAND_LCD
-    movlw	'R'
-    movwf	LCD_DATA
-    call	SEND_CHAR_LCD
+    ; set the LED
+    bcf	    LED_CONFIG
+    bsf	    LED_RUN
+
+    bsf	    PREV_MODE
 
     ; set CCP2 interruption
     banksel	PIE2
@@ -366,25 +361,22 @@ set_run_mode:
     bsf		GIE	    ; Enable global interruptions
     return
 
-set_config_mode:
+
+signal_config:
+    btfsc   PREV_MODE
+    call    init_mode_config
+    goto    main
+
+init_mode_config:
     ; disable other interruptions
-    banksel	PIE2
-    bcf		CCP2IE	    ; Enable CCP2 interruptions
     banksel	INTCON
-    bcf		PEIE
-    bcf		GIE
+    clrf	INTCON
 
-    ; set LEDs
-    bsf		LED_CONFIG
-    bcf		LED_RUN
+    ; set the LED
+    bcf	    LED_RUN
+    bsf	    LED_CONFIG
 
-    ; set LCD (send character to the last position of the first line)
-    movlw	0x93
-    movwf	LCD_DATA
-    call	SEND_COMMAND_LCD
-    movlw	'C'
-    movwf	LCD_DATA
-    call	SEND_CHAR_LCD
+    bcf	    PREV_MODE
     
     ; enable interruption on RB0
     banksel	INTCON
@@ -395,74 +387,144 @@ set_config_mode:
     return
 
 
-
-
-
-signal_gen:
-    btfss   PREV_MODE
-    call    init_mode_run
-    goto    main
-
-init_mode_run:
-    ; set the LED
-    bcf	    LED_CONFIG
-    bsf	    LED_RUN
-
-    ; display the title
-    call    display_run_mode
-
-    bsf	    PREV_MODE
-
-    ; enable interruptions
-    bsf	    GIE
-    return
-
-
-signal_config:
-    btfsc   PREV_MODE
-    call    init_mode_config
-    goto    main
-
-init_mode_config:
-    ; disable interruptions
-    bcf	    GIE
-
-    ; set the LED
-    bcf	    LED_RUN
-    bsf	    LED_CONFIG
+; Initializes the dignal parameters
+; =================================
+init_parameters:
+    ; amplitude -> 100%
+    movlw	100
+    movwf	amplitude
     
-    call    display_config_mode
-
-    bcf	    PREV_MODE
+    ; duty cycle -> 50%
+    movlw	50
+    movwf	duty_cycle
+    
+    ; frequency -> 1000kHz
+    INIT16	frequency, 1000
+    
+    ; wave form -> square
+    clrf	wave_form
+    bsf		WF_SQUARE
     return
+
+
+; Increases the amplitude value (step 10)
+; =======================================
+set_amplitude_up:
+    ; test the max value (100)
+    movlw	100
+    subwf	amplitude, w
+    btfsc	CARRY
+    return
+
+    ; if the amplitude is lower than 100, add the step value
+    movlw	10
+    addwf	amplitude, f
+
+    ; then display the updated amplitude value
+    goto	display_amplitude
+
+
+; Decreases the amplitude value (step 10)
+; =======================================
+set_amplitude_down:
+    ; substract the step value to the amplitude
+    movlw	10
+    subwf	amplitude, w
+    btfss	CARRY
+    return
+
+    ; if result is greater than or equal to 0, update the amplitude value with it
+    movwf	amplitude
+
+    ; then display the updated amplitude value
+    goto	display_amplitude
+
+
+; Increases the duty cycle value (step 10)
+; ========================================
+set_duty_cycle_up:
+    ; test the max value (100)
+    movlw	100
+    subwf	duty_cycle, w
+    btfsc	CARRY
+    return
+
+    ; if the duty cycle is lower than 100, add the step value
+    movlw	10
+    addwf	duty_cycle, f
+
+    ; then display the updated duty cycle value
+    goto	display_duty_cycle
+
+
+; Decreases duty cycle value (step 5)
+; ===================================
+set_duty_cycle_down:
+    ; substract the step value to the duty cycle
+    movlw	10
+    subwf	duty_cycle, w
+    btfss	CARRY
+    return
+
+    ; if result is greater than or equal to 0, update the duty cycle value with it
+    movwf	duty_cycle
+
+    ; then display the updated duty cycle value
+    goto	display_duty_cycle
+
+
+; Increases the frequency value (step 50)
+; =======================================
+set_frequency_up:
+    ; test the max value (1050)
+    SUBI16	frequency, 1050
+    btfsc	CARRY
+    goto	end_frequency_up
+    goto	add_frequency_step
+end_frequency_up:
+    ADDI16	frequency, 1050
+    return
+add_frequency_step:
+    ADDI16	frequency, 1100
+    goto	display_frequency
+
+
+; Decreases the frequency value (step 50)
+; =======================================
+set_frequency_down:
+    ; substract the step value to the frequency
+    SUBI16	frequency, 50
+    btfsc	CARRY
+
+    ; if the result is greater than or equal to 0, display the updated frequency value
+    goto	display_frequency
+
+    ; else reverse the substraction and return
+    ADDI16	frequency, 50
+    return
+
+
+; Sets the next wave form: square -> triangle -> square...
+; ========================================================
+set_next_wave_form:
+    ; bit rotation
+    bcf		CARRY
+    rrf		wave_form
+
+    ; if CARRY is set
+    btfsc	CARRY
+
+    ; then initialize the wave form to the first
+    bsf		WF_SQUARE
+
+    ; display the wave form name
+    goto	display_wave_form
 
 
 ; Parameters display initialization
 ; =================================
 init_display:
     movlw	LCD_LINE1
-    movwf	LCD_DATA
-    call	SEND_COMMAND_LCD
-    movlw	'S'
-    movwf	LCD_DATA
-    call	SEND_CHAR_LCD
-    movlw	'I'
-    movwf	LCD_DATA
-    call	SEND_CHAR_LCD
-    movlw	'G'
-    movwf	LCD_DATA
-    call	SEND_CHAR_LCD
-    movlw	'N'
-    movwf	LCD_DATA
-    call	SEND_CHAR_LCD
-    movlw	'A'
-    movwf	LCD_DATA
-    call	SEND_CHAR_LCD
-    movlw	'L'
-    movwf	LCD_DATA
-    call	SEND_CHAR_LCD
-
-    movlw	LCD_LINE2
     movwf	LCD_DATA
     call	SEND_COMMAND_LCD
     movlw	'W'
@@ -493,7 +555,7 @@ init_display:
     movwf	LCD_DATA
     call	SEND_CHAR_LCD
 
-    movlw	LCD_LINE3
+    movlw	LCD_LINE2
     movwf	LCD_DATA
     call	SEND_COMMAND_LCD
     movlw	'F'
@@ -524,7 +586,7 @@ init_display:
     movwf	LCD_DATA
     call	SEND_CHAR_LCD
 
-    movlw	0xA5
+    movlw	0xD1
     movwf	LCD_DATA
     call	SEND_COMMAND_LCD
     movlw	'k'
@@ -537,7 +599,7 @@ init_display:
     movwf	LCD_DATA
     call	SEND_CHAR_LCD
 
-    movlw	LCD_LINE4
+    movlw	LCD_LINE3
     movwf	LCD_DATA
     call	SEND_COMMAND_LCD
     movlw	'D'
@@ -571,6 +633,44 @@ init_display:
     movwf	LCD_DATA
     call	SEND_CHAR_LCD
 
+    movlw	0xA7
+    movwf	LCD_DATA
+    call	SEND_COMMAND_LCD
+    movlw	'%'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+
+    movlw	LCD_LINE4
+    movwf	LCD_DATA
+    call	SEND_COMMAND_LCD
+    movlw	'A'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	'm'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	'p'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	'l'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	'i'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	't'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	'u'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	'd'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	'e'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+
     movlw	0xE7
     movwf	LCD_DATA
     call	SEND_COMMAND_LCD
@@ -579,111 +679,19 @@ init_display:
     call	SEND_CHAR_LCD
     return
 
-; displays the mode config
-; ========================
-display_config_mode:
-    movlw	0x87
-    movwf	LCD_DATA
-    call	SEND_COMMAND_LCD
-    movlw	'C'
-    movwf	LCD_DATA
-    call	SEND_CHAR_LCD
-    movlw	'O'
-    movwf	LCD_DATA
-    call	SEND_CHAR_LCD
-    movlw	'N'
-    movwf	LCD_DATA
-    call	SEND_CHAR_LCD
-    movlw	'F'
-    movwf	LCD_DATA
-    call	SEND_CHAR_LCD
-    movlw	'I'
-    movwf	LCD_DATA
-    call	SEND_CHAR_LCD
-    movlw	'G'
-    movwf	LCD_DATA
-    call	SEND_CHAR_LCD
-    movlw	'U'
-    movwf	LCD_DATA
-    call	SEND_CHAR_LCD
-    movlw	'R'
-    movwf	LCD_DATA
-    call	SEND_CHAR_LCD
-    movlw	'A'
-    movwf	LCD_DATA
-    call	SEND_CHAR_LCD
-    movlw	'T'
-    movwf	LCD_DATA
-    call	SEND_CHAR_LCD
-    movlw	'I'
-    movwf	LCD_DATA
-    call	SEND_CHAR_LCD
-    movlw	'O'
-    movwf	LCD_DATA
-    call	SEND_CHAR_LCD
-    movlw	'N'
-    movwf	LCD_DATA
-    call	SEND_CHAR_LCD
-    return
 
-; displays the mode run
-; =====================
-display_run_mode:
-    movlw	0x87
-    movwf	LCD_DATA
-    call	SEND_COMMAND_LCD
-    movlw	'G'
-    movwf	LCD_DATA
-    call	SEND_CHAR_LCD
-    movlw	'E'
-    movwf	LCD_DATA
-    call	SEND_CHAR_LCD
-    movlw	'N'
-    movwf	LCD_DATA
-    call	SEND_CHAR_LCD
-    movlw	'E'
-    movwf	LCD_DATA
-    call	SEND_CHAR_LCD
-    movlw	'R'
-    movwf	LCD_DATA
-    call	SEND_CHAR_LCD
-    movlw	'A'
-    movwf	LCD_DATA
-    call	SEND_CHAR_LCD
-    movlw	'T'
-    movwf	LCD_DATA
-    call	SEND_CHAR_LCD
-    movlw	'I'
-    movwf	LCD_DATA
-    call	SEND_CHAR_LCD
-    movlw	'O'
-    movwf	LCD_DATA
-    call	SEND_CHAR_LCD
-    movlw	'N'
-    movwf	LCD_DATA
-    call	SEND_CHAR_LCD
-    movlw	' '
-    movwf	LCD_DATA
-    call	SEND_CHAR_LCD
-    movlw	' '
-    movwf	LCD_DATA
-    call	SEND_CHAR_LCD
-    movlw	' '
-    movwf	LCD_DATA
-    call	SEND_CHAR_LCD
-    return
-
+; Displays the signal wave form
+; =============================
 display_wave_form:
     btfsc   WF_SQUARE
-    call    display_wave_form_square
+    goto    display_wave_form_square
     btfsc   WF_TRIANGLE
-    call    display_wave_form_triangle
-    return
+    goto    display_wave_form_triangle
     
 ; displays the wave form traingle
 ; ===============================
 display_wave_form_triangle:
-    movlw	0xCC
+    movlw	0x8C
     movwf	LCD_DATA
     call	SEND_COMMAND_LCD
     movlw	't'
@@ -715,7 +723,7 @@ display_wave_form_triangle:
 ; displays the wave form square
 ; =============================
 display_wave_form_square:
-    movlw	0xCC
+    movlw	0x8C
     movwf	LCD_DATA
     call	SEND_COMMAND_LCD
     movlw	' '
@@ -749,7 +757,7 @@ display_wave_form_square:
 display_frequency:
     MOV16	VAR16, frequency
     call	HEX16_TO_BCD_ASCII
-    movlw	0xA0
+    movlw	0xCC
     movwf	LCD_DATA
     call	SEND_COMMAND_LCD
     movf	BCD4, w
@@ -773,6 +781,26 @@ display_frequency:
 ; =======================
 display_duty_cycle:
     movf	duty_cycle, w
+    call	HEX8_TO_BCD_ASCII
+    movlw	0xA4
+    movwf	LCD_DATA
+    call	SEND_COMMAND_LCD
+    movf	BCD2, w
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movf	BCD1, w
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movf	BCD0, w
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    return
+
+
+; Displays the amplitude
+; ======================
+display_amplitude:
+    movf	amplitude, w
     call	HEX8_TO_BCD_ASCII
     movlw	0xE4
     movwf	LCD_DATA
