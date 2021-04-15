@@ -91,6 +91,7 @@ ENDM
 
 ; Immediate substraction (sublw equivalent)
 ;   DST = DST - CONST
+;   CARRY is set if the result is lower than 0
 SUBI16	MACRO   DST, CONST
     movlw   low(CONST)
     subwf   (DST), f

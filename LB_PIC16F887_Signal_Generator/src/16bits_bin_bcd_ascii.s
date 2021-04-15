@@ -105,7 +105,7 @@ HEX8_TO_BCD_ASCII:
 HEX8_COUNT_HUNDREDS:
     movlw	100		; substract 100 to the units
     subwf	BCD0, w
-    btfss	CARRY		; if the result is not greater than 100
+    btfss	CARRY		; if the result is lower than 0
     goto	HEX8_COUNT_TENS	; then compute the tens
     movwf	BCD0		; else continue the count
     incf	BCD2, f
@@ -114,7 +114,7 @@ HEX8_COUNT_HUNDREDS:
 HEX8_COUNT_TENS:
     movlw	10		; substract 10 to the units
     subwf	BCD0, w
-    btfss	CARRY		; if the result is not greater than 10
+    btfss	CARRY		; if the result is lower than 0
     goto	BCD8_TO_ASCII	; then convert the result to ascii
     movwf	BCD0		; else continue the count
     incf	BCD1, f
@@ -133,27 +133,25 @@ HEX16_TO_BCD_ASCII:
 
 HEX16_COUNT_TEN_THOUSANDS:
     SUBI16	VAR16, 10000		; substract 10000 to VAR16
-    btfss	CARRY			; if the result is not greater than 10000
+    btfss	CARRY			; if the result is lower than 0
     goto	HEX16_COUNT_THOUSANDS	; count the thousands
     incf	BCD4, f			; else continue the count
     goto	HEX16_COUNT_TEN_THOUSANDS
 
 HEX16_COUNT_THOUSANDS:
     ADDI16	VAR16, 10000
-    bcf		CARRY
 HEX16_COUNT_THOUSANDS_LOOP:
     SUBI16	VAR16, 1000		; substract 1000 to VAR16
-    btfss	CARRY			; if the result is not greater than 1000
+    btfss	CARRY			; if the result is lower than 0
     goto	HEX16_COUNT_HUNDREDS	; count the hundreds
     incf	BCD3, f			; else continue the count
     goto	HEX16_COUNT_THOUSANDS_LOOP
 
 HEX16_COUNT_HUNDREDS:
     ADDI16	VAR16, 1000
-    bcf		CARRY
 HEX16_COUNT_HUNDREDS_LOOP:
     SUBI16	VAR16, 100		; substract 100 to VAR16
-    btfss	CARRY			; if the result is not greater than 100
+    btfss	CARRY			; if the result is lower than 0
     goto	HEX16_COUNT_TENS	; count the tens
     incf	BCD2, f			; else continue the count
     goto	HEX16_COUNT_HUNDREDS_LOOP
@@ -166,7 +164,7 @@ HEX16_COUNT_TENS:
 HEX16_COUNT_TENS_LOOP:
     movlw	10		; substract 10 to the units
     subwf	BCD0, w
-    btfss	CARRY		; if the result is not greater than 10
+    btfss	CARRY		; if the result is lower than 0
     goto	BCD16_TO_ASCII	; then convert the result to ascii
     movwf	BCD0		; else continue the count
     incf	BCD1, f
@@ -174,9 +172,6 @@ HEX16_COUNT_TENS_LOOP:
 
 ; convert BCD 4-3 to ASCII digits
 BCD16_TO_ASCII:
-;    movf	VAR16, w
-;    movwf	BCD0
-
     movf	BCD4, w
     xorlw	0x30
     movwf	BCD4
