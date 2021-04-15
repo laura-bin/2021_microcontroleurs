@@ -37,7 +37,6 @@ INIT_PCA9554:
     return
 
 READ_PCA9554:
-    ; PORT -> input
     call    START_I2C
     movlw   PCA9554_KEYPAD_ADD_W
     call    SEND_I2C
