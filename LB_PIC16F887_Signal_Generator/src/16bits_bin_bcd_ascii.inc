@@ -1,14 +1,11 @@
 ; Hexadecimal to ASCII and to BCD ASCII functions and variables
 ; used to display hexadecimal values, converted to BCD or not, on an LCD display
-; 
-
 
 ; Functions
 ; =========
 EXTRN	HEX_TO_ASCII	    ; 8 bits hexadecimal to ASCII conversion
 EXTRN	HEX8_TO_BCD_ASCII   ; 8 bits hexadecimal to BCD ASCII conversion
 EXTRN	HEX16_TO_BCD_ASCII  ; 16 bits hexadecimal to BCD ASCII conversion
-
 
 ; Variables
 ; =========

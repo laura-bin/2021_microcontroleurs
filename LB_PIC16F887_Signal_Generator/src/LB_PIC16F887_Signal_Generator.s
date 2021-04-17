@@ -1,18 +1,12 @@
 ; Generateur de signaux digitaux (carres et triangulaires)
 ; ========================================================
 ;
-; v1:
-;   - program structure with run/config modes
-;   - LCD connections 
-; v2:
-;   - 16 bits arithmetic
-;
-; PIC16F887 (4MHz clock - 1MHz/1us cycle)
+; PIC16F887 (20MHz clock - 5MHz/0.2us Tcy)
 ; Proteus : LB_PIC16F887_Signal_Generator_v1
 ;
 ; Linker options:
-;   -preset_vec=0x00
-;   -pinter_vec=0x04
+;   -presetVec=0x00
+;   -pinterVec=0x04
 ;
 ; Laura Binacchi - SLP 2020/2021
 
@@ -29,166 +23,157 @@ CONFIG WDTE=OFF		; Watchdog timer disabled
 CONFIG PWRTE=OFF 	; PWRT disabled
 CONFIG CP=OFF		; Program memory unprotected
 
+
 #include <xc.inc>
 #include "16bits_arithmetic.inc"
 #include "16bits_bin_bcd_ascii.inc"
 #include "config.inc"
 #include "I2C.inc"
-#include "KEYPAD_PCA9554.inc"
 #include "LM044L_PCA9535.inc"
+#include "PCA9554.inc"
 #include "delay.inc"
 
-#define	AMPL_UP		KEYPAD_DATA, 6
-#define	AMPL_DOWN	KEYPAD_DATA, 5
-#define	DC_UP		KEYPAD_DATA, 4
-#define	DC_DOWN		KEYPAD_DATA, 3
-#define	FREQ_UP		KEYPAD_DATA, 2
-#define	FREQ_DOWN	KEYPAD_DATA, 1
-#define	NEXT_WAVE_FORM	KEYPAD_DATA, 0
+; signal wave forms types implemented
+#define WF_SQUARE	wave_form, 1
+#define WF_TRIANGLE	wave_form, 0
+
+; application previous mode
+#define PREV_MODE	sig_info, 0
+
+#define N_SAMPLES	100
 
 
 ; Variables
 ; =========
 PSECT udata_bank0
+
 ; Context saving variables
 w_temp:		DS 1
 status_temp:	DS 1
 ; pclath_temp:	DS 1
 
-; Signal information
-; bit 0 : rising edge (1) - falling edge (0)
-signal_info:	DS 1
-#define	RUN_MODE    signal_info, 0	    ; (1) run mode - (0) config mode
-#define	PREV_MODE   signal_info, 1	    ; (1) run mode - (0) config mode	
-
-period:	    DS 2
-
-
-; signal parameters:
+; signal parameters
 amplitude:		DS 1
 duty_cycle:		DS 1
 frequency:		DS 2
 wave_form:		DS 1    ; (square, triangle or sawtooth)
-#define WF_SQUARE	wave_form, 1
-#define WF_TRIANGLE	wave_form, 0
+
+; signal information kept in memory
+sig_info:		DS 1
 
     
+    
+    
+
+signal16: DS 2
+
 i:  DS 1
 rising_inc: DS 1
 falling_inc: DS 1
-dir: DS 1 ; sens de l'increment
-cpt: DS 1   ; nombre constant d'increments
-signal: DS 1	;valeur courante du signal
-rising_steps: DS 1  ; nombre de pas du front montant
-falling_steps: DS 1  ; nombre de pas du front descendant
+dir: DS 1		; sens de l'increment
+cpt: DS 1		; nombre constant d'increments
+signal: DS 1		; valeur courante du signal
+rising_steps: DS 1	; nombre de pas du front montant
+falling_steps: DS 1	; nombre de pas du front descendant
 samples:	DS 1	; nombre total d'echantillons -> samples
-v1: DS 1    ; data send by keypad
-v2: DS 1    ; previous v1
-app_mode: DS 1	    ; app mode char / mode RUN (1) or config (0)
+v1: DS 1		; data send by keypad
+v2: DS 1		; previous v1
+app_mode: DS 1		; app mode char / mode RUN (1) or config (0)
+
 
 PSECT udata_bank1
-signal_low: DS 50	; signal data vector (low values)
+signal1: DS 50	    ; signal data vector 1/2
 
 PSECT udata_bank2
-signal_high: DS 50	; signal data vector (high values)
+signal2: DS 50	    ; signal data vector 2/2
 
-    
-    
-    
-    
-; sert a cacher al séparation du tableau en 2 (en pas répéter l'alternative)
-; macro car on ne perd pas les 4 cycles machines d'office du call
-; get the element of the array at given index
+
+
+; Get the element of the signal array at given index
+; the value is put in the W register
+; ==================================================
 GET_SIGNAL  MACRO   INDEX
-LOCAL GET_SIGNAL_HIGH		    ; LOCAL ensures the uniqueness of the labels defined in the macro 
-LOCAL GET_SIGNAL_END		    ; (a unique tag is added to the label address)
+LOCAL GET_SIGNAL2		    ; LOCAL ensures the uniqueness of the labels defined in the macro 
+LOCAL GET_SIGNAL_END		    ; by adding a unique tag to the label address
     movlw   50
     subwf   (INDEX), w  
-    btfsc   CARRY		    ; if counter is greater than 50
-    goto    GET_SIGNAL_HIGH	    ; goto the high half of the array (in bank 2)
+    btfsc   CARRY		    ; if the index is greater than 50
+    goto    GET_SIGNAL2		    ; goto the second part of the array (in bank 2)
     bcf	    STATUS, 7		    ; clear IRP to select bank 1
-    movlw   signal_low		    ; move the array pointer value
+    movlw   signal1		    ; move the array pointer value
     movwf   FSR			    ; to FSR
     movf    (INDEX), w
     addwf   FSR, f		    ; add the index value to the pointer
     movf    INDF, w		    ; move the data at this position to the W register
     goto    GET_SIGNAL_END
-GET_SIGNAL_HIGH:
+GET_SIGNAL2:
     bsf	    STATUS, 7		    ; set IRP to select bank 2
-    movlw   BANKMASK(signal_high)   ; get the correct pointer on the array (7bits -> 8bits)
+    movlw   BANKMASK(signal2)	    ; get the correct pointer on the array (7bits -> 8bits)
     movwf   FSR			    ; and move it to FSR
     movlw   50
-    subwf   (INDEX), w		    ; remove 50 from the index value
-    addwf   FSR, f		    ; add the index value to the pointer
+    subwf   (INDEX), w		    ; adjust index
+    addwf   FSR, f		    ; and add the index value to the pointer
     movf    INDF, w		    ; move the data at this position to the W register
 GET_SIGNAL_END:
 ENDM
-    
-SET_SIGNAL  MACRO   CPT, VAL
-LOCAL SET_SIG1
-LOCAL SET_SIG2
+
+
+; Set the element of the signal array at given index
+; ==================================================
+SET_SIGNAL  MACRO   INDEX, VALUE
+LOCAL SET_SIGNAL2
+LOCAL SET_SIGNAL_END
     movlw   50
-    subwf   CPT, w
-    btfsc   CARRY
-    goto    SET_SIG1
-    bcf	    STATUS, 7
-    movlw   tsig1
-    movwf   FSR
-    movf    CPT, w
-    addwf   FSR, f
-    movf    VAL, w
-    movwf   INDF
-    goto    SET_SIG2
-SET_SIG1:
-    bsf	    STATUS, 7
-    movlw   BANKMASK(tsig2)
-    movwf   FSR
+    subwf   INDEX, w
+    btfsc   CARRY		    ; if the index is greater than 50
+    goto    SET_SIGNAL2		    ; go to the second part of the array (in bank 2)
+    bcf	    STATUS, 7		    ; select bank 1
+    movlw   signal1		    ; move the pointer of the array
+    movwf   FSR			    ; in FSR
+    movf    INDEX, w
+    addwf   FSR, f		    ; add the index value		
+    movf    VALUE, w
+    movwf   INDF		    ; set the value
+    goto    SET_SIGNAL_END
+SET_SIGNAL2:
+    bsf	    STATUS, 7		    ; select bank 2
+    movlw   BANKMASK(signal2)	    ; move the pointer of the array
+    movwf   FSR			    ; in FSR
     movlw   50
-    subwf   CPT, w
-    addwf   FSR, f
-    movf    VAL, w
-    movwf   INDF
-SET_SIG2:
+    subwf   INDEX, w		    ; adjust index
+    addwf   FSR, f		    ; and add the index value to the pointer
+    movf    VALUE, w
+    movwf   INDF		    ; set the value
+SET_SIGNAL_END:
 ENDM
+
 
 ; Reset vector
 ; ============
-PSECT reset_vec, class=CODE, delta=2
-reset_vec:
-    goto    init
+PSECT resetVec, class=CODE, delta=2
+resetVec:
+    goto	init
 
 ; Interruption vector
 ; ===================
-PSECT inter_vec, class=CODE, delta=2
-inter_vec:
-    ; save w and STATUS registers
+PSECT interVec, class=CODE, delta=2
+interVec:
+    ; Save w and STATUS registers
     ; swaps are used because they do not affect the status bits
-    movwf   w_temp
-    swapf   STATUS, w
-    movwf   status_temp
-    ; uncomment if PCLATH register is used
+    movwf	w_temp
+    swapf	STATUS, w
+    movwf	status_temp
+    ; Uncomment if PCLATH register is used
     ;movf    PCLATH, w
     ;movwf   pclath_temp
     ;clrf    PCLATH
-    
-    bsf	    LED_CONFIG
-    
+
+    ; Test the interrupt flag
     btfsc   CCP2IF
     goto    generate_signal
-    goto    read_inputs
-    
-;    GET_SIGNAL	cpt
-;    
-;    movwf   DAC0808
-;    incf    cpt, f
-;    movf    samples, w
-;    subwf   cpt, w
-;    btfsc   ZERO
-;    clrf    cpt
-;    goto    end_inter
-
 
 read_inputs:
+    ; Test the data read by the PCA9554 to set the selected parameter
     call    READ_PCA9554
     btfss   AMPL_UP
     call    set_amplitude_up
@@ -205,32 +190,35 @@ read_inputs:
     btfss   NEXT_WAVE_FORM
     call    set_next_wave_form
 
-
-    ;call	READ_PCA9554
+    ; Clear the interrupt flag
     bcf	    INTF
     goto    end_inter
     
 generate_signal:
-    btfss   PORTC, 5
-    bsf	    PORTC, 5
-    btfsc   PORTC, 5
-    bcf	    PORTC, 5
+    GET_SIGNAL	cpt
+    movwf	DAC0808
+    incf	cpt, f
+    movlw	N_SAMPLES
+    subwf	cpt, w
+    btfsc	ZERO
+    clrf	cpt
+
+    ;btfss   PORTC, 5
+    ;bsf	    PORTC, 5
+    ;btfsc   PORTC, 5
+    ;bcf	    PORTC, 5
     bcf	    CCP2IF
     goto    end_inter 
 
 end_inter:
-    ; Clear interrupt flag
-    
     ; Restore w and STATUS registers (& Bank Select Bit register)
-    ;movf    pclath_temp, w  ;Restore PCLATH
-    ;movf    pclath_temp, w  ;Restore PCLATH
-    ;movwf   PCLATH	    ;Move W into PCLATH
-    
-    swapf   status_temp, w  ;Swap STATUS_TEMP register into W
-    ;(sets bank to original state)
-    movwf   STATUS	    ; Move W into STATUS register
-    swapf   w_temp, f	    ;Swap W_TEMP
-    swapf   w_temp, w	    ;Swap W_TEMP into W
+    ;movf    pclath_temp, w
+    ;movf    pclath_temp, w
+    ;movwf   PCLATH
+    swapf   status_temp, w
+    movwf   STATUS
+    swapf   w_temp, f
+    swapf   w_temp, w
     retfie
 
 
@@ -239,95 +227,75 @@ PSECT code
 ; PIC initialization
 ; ==================
 init:
-    ; PORTC -> output
-    banksel TRISA
-    clrf    TRISA
-    ; PORTC -> output
-    banksel TRISC
-    clrf    TRISC
-    ; PORTC -> output
-    banksel TRISD
-    clrf    TRISD
-    
-    banksel TRISB
-    bsf	    TRISB, 0
+    ; I/O configuration
+    banksel	TRISC
+    movlw	0x01	    ; PORTC -> output, except for RC0 (mode switch)
+    movwf	TRISC
 
-    ; RUN/CONFIG -> input
-    bsf	    TRISC, 7
+    clrf	TRISD	    ; PORTD (DAC0808) -> output
 
-    ; PORTB -> digital
-    banksel	ANSELH
+    bsf		TRISB, 0    ; RB0 -> input
+
+    banksel	PORTC	    ; LED RUN OFF
+    bcf		LED_RUN
+
+    clrf	DAC0808	    ; DAC0808 (PORTD) -> 0
+
+    ; RB0 interruption
+    banksel	ANSELH	    ; PORTB -> digital
     clrf	ANSELH
-    
-    banksel	OPTION_REG
-    bcf		INTEDG
+    bcf		INTEDG	    ; RB0 interruption triggered by falling edge
 
-    ; PORTC -> 0
-    banksel PORTA
-    movlw   0x00
-    movwf   PORTA
-    ; PORTC -> 0
-    banksel PORTC
-    clrf    PORTC
-    ; PORTC -> 0
-    banksel PORTD
-    clrf    PORTD
-
-    ; I2C bus initialization
-    ; ----------------------
-
-    call    INIT_I2C
-    call    INIT_PCA9535
-    call    INIT_LM044L
-    call    INIT_PCA9554
-
-    ; Compare module initialization
-    ; -----------------------------
-
-    ; Compare mode, trigger special event (CCP2IF bit is set; CCP2 resets TMR1)
+    ; CCP2 interruption
     banksel	CCP2CON
-    movlw	0x0B
+    movlw	0x0B	    ; Compare mode, trigger special event (CCP2IF bit is set; CCP2 resets TMR1)
     movwf	CCP2CON
 
-    ; Timer1 ON, prescale 1:1
-    movlw	0x01
+    movlw	0x01	    ; Timer1 ON, prescale 1:1
     movwf	T1CON
 
-    ; Timer1 -> 0
-    clrf	TMR1H
+    clrf	TMR1H	    ; Timer1 -> 0
     clrf	TMR1L
 
-    ; CCPR2H-L -> 50*Tcy(0.2us) -> 10us (100kHz)
-    banksel	CCPR2H
     clrf	CCPR2H
-    movlw	50
+    movlw	50	    ; CCPR2H-L -> 50*Tcy(0.2us) -> 10us (100kHz)
     movwf	CCPR2L
+
+    ; Set the signal default parameters
+    movlw	100	    ; amplitude -> 100%
+    movwf	amplitude
+
+    movlw	50	    ; duty cycle -> 50%
+    movwf	duty_cycle
+
+    INIT16	frequency, 1000	    ; frequency -> 1000kHz
     
-    ; init parameters
-    ; compute the frequency
-    INIT16	OP1, 5000
-    MOV16	OP2, CCPR2L
-    call	DIV16
-    MOV16	frequency, RESULT
+    clrf	wave_form   ; wave form -> square
+    bsf		WF_SQUARE
 
-    call	init_parameters
+    ; Initialize the I2C bus and the attached peripherals
+    call	INIT_I2C
+    call	INIT_PCA9535
+    call	INIT_LM044L
+    call	INIT_PCA9554
 
+    ; Display the parameters
     call	init_display
     call	display_wave_form
     call	display_frequency
     call	display_duty_cycle
     call	display_amplitude
-    
-    ; RUN/CONFIG mode initialization
-    ; ------------------------------
 
+    ; Set the selected mode
     btfsc	MODE
     call	init_mode_run
     btfss	MODE
     call	init_mode_config
 
+    goto	main
 
-; Main loop: RUN/CONFIG button polling
+
+; Main loop: RUN/CONFIG switch polling
 ; ====================================
 main:
     ; Mode RUN / CONFIG selection
@@ -336,75 +304,129 @@ main:
     goto	signal_gen
 
 
+; Signal generation mode
+; ======================
 signal_gen:
-    btfss   PREV_MODE
-    call    init_mode_run
-    goto    main
+    btfss   PREV_MODE		; if the mode has just been changed
+    call    init_mode_run	; initialize the run mode
+    goto    main		; wait for the CCP2 interruption to happen
 
+
+; Signal configuration mode
+; =========================
+signal_config:
+    btfsc   PREV_MODE		; if the mode has just been changed
+    call    init_mode_config	; initialize the configuration mode
+    goto    main		; wait for the RB0 interruption to happen
+
+
+; Run mode initialization
+; =======================
 init_mode_run:
-    ; disable other interruptions
-    banksel	INTCON
+    banksel	INTCON	    ; disable all the interruptions
     clrf	INTCON
 
-    ; set the LED
-    bcf	    LED_CONFIG
-    bsf	    LED_RUN
+    bsf		LED_RUN	    ; switch on the LED
+    bsf		PREV_MODE   ; set the previous mode to RUN
+    
+    btfsc	WF_SQUARE		; if the selected signal wave form is square
+    call	init_square_signal	; init the square signal
+    btfsc	WF_TRIANGLE		; if the selected signal wave form is triangle
+    call	init_triangle_signal	; init the triangle signal
 
-    bsf	    PREV_MODE
-
-    ; set CCP2 interruption
+    ; Enable the CCP2 interruption
     banksel	PIE2
-    bsf		CCP2IE	    ; Enable CCP2 interruptions
+    bsf		CCP2IE	    ; enable CCP2 interruptions
     banksel	INTCON
-    bcf		CCP2IF	    ; Clear CCP2 interrupt flag
-    bsf		PEIE	    ; Enable peripherical interruptions
-    bsf		GIE	    ; Enable global interruptions
+    bcf		CCP2IF	    ; clear CCP2 interrupt flag
+    bsf		PEIE	    ; enable peripherical interruptions
+    bsf		GIE	    ; enable global interruptions
+
     return
 
 
-signal_config:
-    btfsc   PREV_MODE
-    call    init_mode_config
-    goto    main
-
+; Configuration mode initialization
+; =================================
 init_mode_config:
-    ; disable other interruptions
-    banksel	INTCON
+    banksel	INTCON	    ; disable all the interruptions
     clrf	INTCON
 
-    ; set the LED
-    bcf	    LED_RUN
-    bsf	    LED_CONFIG
+    bcf		LED_RUN	    ; switch off the LED
+    bcf		PREV_MODE   ; set the previous mode to CONFIG
 
-    bcf	    PREV_MODE
-    
-    ; enable interruption on RB0
+    ; Enable interruption on RB0
     banksel	INTCON
     bcf		INTF
     bsf		INTE
     bsf		GIE
-    
+
     return
 
 
-; Initializes the dignal parameters
-; =================================
-init_parameters:
-    ; amplitude -> 100%
+; Initialize a square signal
+; ==========================
+init_square_signal:
+    clrf	cpt
+    clrf	signal
+    
+    movlw	0xFF		; max signal value
+    movwf	OPL8
+    ;movf	amplitude, w
     movlw	100
-    movwf	amplitude
+    movwf	OPR8
+    call	MUL8
+    ; copy the result to the 16 bit left operand
+    MOV16	OPL16, RESULT16
+    INIT16	OPR16, 100
+    call	DIV16
     
-    ; duty cycle -> 50%
-    movlw	50
-    movwf	duty_cycle
+    movf	RESULT32+3, w
+    movwf	signal
     
-    ; frequency -> 1000kHz
-    INIT16	frequency, 1000
+    ;INIT16	OP2, 100
+    MOV16	OPL16, amplitude
+    INIT16	OPR16, 0x00FF
+    call	MUL16
     
-    ; wave form -> square
-    clrf	wave_form
-    bsf		WF_SQUARE
+    ; init the high period
+    ;movlw	duty_cycle
+    ;movwf	i
+    
+    movlw	N_SAMPLES
+    movwf	i
+    clrf	cpt
+    
+init_signal1:
+    SET_SIGNAL	cpt, signal
+    incf	cpt, f
+    decf	signal
+    decfsz	i, f
+    goto	init_signal1
+    
     return
+    
+; Initialize a triangle signal
+; ==========================
+init_triangle_signal:
+    return
+    
+;init_signal:
+;    movlw	N_SAMPLES
+;    movwf	i
+;    clrf	cpt
+;    clrf	signal
+;init_signal1:
+;    SET_SIGNAL	cpt, signal
+;    incf	cpt, f
+;    incf	signal
+;    decfsz	i, f
+;    goto	init_signal1
+;    return
+
+
+
+
+
 
 
 ; Increases the amplitude value (step 10)
@@ -818,4 +840,4 @@ display_amplitude:
 
 ; End of ASM code
 ; ===============
-END reset_vec
+END resetVec

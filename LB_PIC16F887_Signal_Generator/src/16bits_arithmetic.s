@@ -1,76 +1,97 @@
 ; 16 bits arithmetic unsigned multiplication and division
 
 #include <xc.inc>
-;#include "16bits_arithmetic.inc"
-
 
 ; Functions
 ; =========
+global MUL8	    ; 8 bits unsigned multiplication
 global DIV16	    ; 16 bits unsigned division
 global MUL16	    ; 16 bits unsigned multiplication
 
-
 ; Variables
 ; =========
-global	OP1	; left operand (16 bits)
-global	OP2	; right operand (16 bits)
-global	RESULT	; result (32 bits)
-global	TEMP8	; temporary variable (8bits)
-global	TEMP16	; temporary variable (16 bits)
+global	OPL8	    ; left operand (8 bits)
+global	OPR8	    ; right operand (8 bits)
+global	OPL16	    ; left operand (16 bits)
+global	OPR16	    ; right operand (16 bits)
+global	RESULT16    ; result (16 bits)
+global	RESULT32    ; result (32 bits)
+global	TEMP16	    ; temporary variable (16 bits)
 
 
 PSECT udata_bank0
-OP1:	DS 2
-OP2:	DS 2
-RESULT:	DS 4
-TEMP8:	DS 1
-TEMP16:	DS 2
+OPL8:	    DS 1
+OPR8:	    DS 1
+OPL16:	    DS 2
+OPR16:	    DS 2
+RESULT16:   DS 2
+RESULT32:   DS 4
+TEMP8:	    DS 1
+TEMP16:	    DS 2
 
 
 PSECT code
-; Division: RESULT = OP1 / OP2
+
+; RESULT16 = OP_LEFT8 * OP_RIGHT8
+MUL8:
+    clrf    RESULT16
+MUL8LOOP:
+    movf    OPL8, w
+    btfsc   OPR8, 0
+    addwf   RESULT16
+    bcf	    CARRY
+    rrf	    OPR8, f
+    bcf	    CARRY
+    rlf	    OPL8, f
+    movf    OPR8, f
+    btfss   ZERO
+    goto    MUL8LOOP
+    return
+
+
+; Division: RESULT32 = OP_LEFT16 / OP_RIGHT16
 DIV16:
-    movf    OP2, f
+    movf    OPR16, f
     btfss   ZERO
     goto    ZERO_TEST_SKIPPED
-    movf    OP2+1, f
+    movf    OPR16+1, f
     btfsc   ZERO
     return
 
 SUBV16:
-    movf    OP2+1, w
+    movf    OPR16+1, w
     movwf   TEMP8
-    movf    OP2, w
-    subwf   OP1
+    movf    OPR16, w
+    subwf   OPL16
     btfss   CARRY
     incf    TEMP8, f
     movf    TEMP8, w
-    subwf   OP1+1
+    subwf   OPL16+1
     return
 
 ADDV16:
-    movf    OP2, w
-    addwf   OP1
+    movf    OPR16, w
+    addwf   OPL16
     btfsc   CARRY
-    incf    OP1+1, f
-    movf    OP2+1, w
-    addwf   OP1+1
+    incf    OPL16+1, f
+    movf    OPR16+1, w
+    addwf   OPL16+1
     return
 
 ZERO_TEST_SKIPPED:
     movlw   1
     movwf   TEMP16
     clrf    TEMP16+1
-    clrf    RESULT
-    clrf    RESULT+1
+    clrf    RESULT32
+    clrf    RESULT32+1
 SHIFT_IT16:
     bcf	    CARRY
     rlf	    TEMP16, f
     rlf	    TEMP16+1, f
     bcf	    CARRY
-    rlf	    OP2, f
-    rlf	    OP2+1, f
-    btfss   OP2+1, 7
+    rlf	    OPR16, f
+    rlf	    OPR16+1, f
+    btfss   OPR16+1, 7
     goto    SHIFT_IT16
 DIVU16LOOP:
     call    SUBV16
@@ -80,15 +101,15 @@ DIVU16LOOP:
     goto    FINALX
 COUNTX:
     movf    TEMP16, w
-    addwf   RESULT
+    addwf   RESULT32
     btfsc   CARRY
-    incf    RESULT+1, f
+    incf    RESULT32+1, f
     movf    TEMP16+1, w
-    addwf   RESULT+1
+    addwf   RESULT32+1
 FINALX:
     bcf	    CARRY
-    rrf	    OP2+1, f
-    rrf	    OP2, f
+    rrf	    OPR16+1, f
+    rrf	    OPR16, f
     bcf	    CARRY
     rrf	    TEMP16+1, f
     rrf	    TEMP16, f
@@ -97,46 +118,46 @@ FINALX:
     return
 
 
-; Multiplication: RESULT = OP1 * OP2
+; Multiplication: RESULT32 = OP_LEFT16 * OP_RIGHT16
 MUL16:
-    clrf    RESULT+3
-    clrf    RESULT+2
-    clrf    RESULT+1
+    clrf    RESULT32+3
+    clrf    RESULT32+2
+    clrf    RESULT32+1
     movlw   0x80
-    movwf   RESULT
+    movwf   RESULT32
 
 NEXT_BIT:
-    rrf	    OP1+1, f
-    rrf	    OP1, f
+    rrf	    OPL16+1, f
+    rrf	    OPL16, f
 
     btfss   CARRY
     goto    NO_BIT_L
-    movf    OP2, w
-    addwf   RESULT+1, f
+    movf    OPR16, w
+    addwf   RESULT32+1, f
 
-    movf    OP2+1, w
+    movf    OPR16+1, w
     btfsc   CARRY
-    incfsz  OP2+1, w
-    addwf   RESULT+2, f
+    incfsz  OPR16+1, w
+    addwf   RESULT32+2, f
     btfsc   CARRY
-    incf    RESULT+3, f
+    incf    RESULT32+3, f
     bcf	    CARRY
 
 NO_BIT_L:
-    btfss   OP1, 7
+    btfss   OPL16, 7
     goto    NO_BIT_H
-    movf    OP2, w
-    addwf   RESULT+2, f
-    movf    OP2+1, w
+    movf    OPR16, w
+    addwf   RESULT32+2, f
+    movf    OPR16+1, w
     btfsc   CARRY
-    incfsz  OP2+1, w
-    addwf   RESULT+3, f
+    incfsz  OPR16+1, w
+    addwf   RESULT32+3, f
 
 NO_BIT_H:
-    rrf	    RESULT+3, f
-    rrf	    RESULT+2, f
-    rrf	    RESULT+1, f
-    rrf	    RESULT, f
+    rrf	    RESULT32+3, f
+    rrf	    RESULT32+2, f
+    rrf	    RESULT32+1, f
+    rrf	    RESULT32, f
 
     btfss   CARRY
     goto    NEXT_BIT

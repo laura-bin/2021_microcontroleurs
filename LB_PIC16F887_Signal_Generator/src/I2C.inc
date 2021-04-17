@@ -1,5 +1,9 @@
 
 
+#define	I2C_SCL	    PORTC, 3	; I2C clock output PIN
+#define	I2C_SDA	    PORTC, 4	; I2C data output PIN
+
+
 ; Functions
 ; =========
 EXTRN	INIT_I2C	; I2C bus initialization

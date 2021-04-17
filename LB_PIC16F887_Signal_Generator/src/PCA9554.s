@@ -1,24 +1,21 @@
 
-
 #include <xc.inc>
 
 #include "config.inc"
-#include "delay.inc"
 #include "I2C.inc"
-    
+
 ; Functions
 ; =========
 global	INIT_PCA9554	    ; Initializes the PCA9554 I/0 expander initialization
 global	READ_PCA9554	    ; Reads the PCA9554 in the KEYPAD_DATA
 
-
 ; Variables
 ; =========
-global	KEYPAD_DATA	    ; Data read from the keypad
+global	PCA9554_DATA	    ; Data read from the PCA9554
 
 
 PSECT udata_bank0
-KEYPAD_DATA:	DS 1
+PCA9554_DATA:	DS 1
 
 
 PSECT code
@@ -26,7 +23,7 @@ PSECT code
 INIT_PCA9554:
     ; PORT -> input
     call    START_I2C
-    movlw   PCA9554_KEYPAD_ADD_W
+    movlw   PCA9554_ADD_W
     call    SEND_I2C
     movlw   PCA9554_CONFIG
     call    SEND_I2C
@@ -36,18 +33,19 @@ INIT_PCA9554:
 
     return
 
+
 READ_PCA9554:
     call    START_I2C
-    movlw   PCA9554_KEYPAD_ADD_W
+    movlw   PCA9554_ADD_W
     call    SEND_I2C
     movlw   0x00
     call    SEND_I2C
     call    RESTART_I2C
-    movlw   PCA9554_KEYPAD_ADD_R
+    movlw   PCA9554_ADD_R
     call    SEND_I2C
     call    WAIT_ACK_I2C
     call    RECEIVE_I2C
-    movwf   KEYPAD_DATA
+    movwf   PCA9554_DATA
     call    STOP_I2C
 
     return

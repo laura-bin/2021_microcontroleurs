@@ -3,7 +3,6 @@
 
 #include "16bits_arithmetic.inc"
 
-
 ; Functions
 ; =========
 

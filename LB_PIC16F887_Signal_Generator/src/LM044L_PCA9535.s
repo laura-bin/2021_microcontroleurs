@@ -1,5 +1,4 @@
 
-
 #include <xc.inc>
 
 #include "config.inc"
@@ -12,7 +11,6 @@ global	INIT_PCA9535	    ; Initializes the PCA9535 I/0 expander initialization
 global	INIT_LM044L	    ; Initializes the LM044L via PCA9535 I/O expander
 global	SEND_CHAR_LCD	    ; Sends a character to the LM044L via PCA9535 I/O expander
 global	SEND_COMMAND_LCD    ; Sends a command to the LM044L via PCA9535 I/O expander
-
 
 ; Variables
 ; =========
@@ -51,33 +49,33 @@ INIT_PCA9535:
 
 INIT_LM044L:
     ; Initialize the LCD in 8 bits
-    movlw	0x38
-    movwf	LCD_DATA
-    call	SEND_COMMAND_LCD
+    movlw   0x38
+    movwf   LCD_DATA
+    call    SEND_COMMAND_LCD
 
-    call	DELAY_10ms
+    call    DELAY_10ms
 
     ; Initialize the LCD cursor
-    movlw	CURSOR_OFF
-    movwf	LCD_DATA
-    call	SEND_COMMAND_LCD
+    movlw   CURSOR_OFF
+    movwf   LCD_DATA
+    call    SEND_COMMAND_LCD
 
     ; Writing from left to right
-    movlw	0x06
-    movwf	LCD_DATA
-    call	SEND_COMMAND_LCD
+    movlw   0x06
+    movwf   LCD_DATA
+    call    SEND_COMMAND_LCD
 
     ; Clear the LCD
-    movlw	LCD_CLEAR
-    movwf	LCD_DATA
-    call	SEND_COMMAND_LCD
+    movlw   LCD_CLEAR
+    movwf   LCD_DATA
+    call    SEND_COMMAND_LCD
 
     ; Place the cursor on the first line
-    movlw	LCD_LINE1
-    movwf	LCD_DATA
-    call	SEND_COMMAND_LCD
+    movlw   LCD_LINE1
+    movwf   LCD_DATA
+    call    SEND_COMMAND_LCD
 
-    call	DELAY_10ms
+    call    DELAY_10ms
 
     return
 
@@ -149,7 +147,5 @@ SEND_COMMAND_LCD:
     movlw   0x00
     call    SEND_I2C
     call    STOP_I2C
-
-    call    DELAY_40us
 
     return

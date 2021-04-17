@@ -1,5 +1,4 @@
 
-
 #include <xc.inc>
     
 ; Functions
@@ -7,11 +6,9 @@
 global DELAY_10ms	; 10 milli seconds delay
 global DELAY_40us	; 40 micro seconds delay
 
-
 ; Variables
 ; =========
 PSECT udata_bank0
-
 count1:	    DS 1
 count2:	    DS 1
 
