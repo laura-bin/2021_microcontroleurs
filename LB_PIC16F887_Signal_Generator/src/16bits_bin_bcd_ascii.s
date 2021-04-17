@@ -1,7 +1,7 @@
 
 #include <xc.inc>
 
-#include "16bits_arithmetic.inc"
+#include "16bits_arithmetic_macros.inc"
 
 ; Functions
 ; =========

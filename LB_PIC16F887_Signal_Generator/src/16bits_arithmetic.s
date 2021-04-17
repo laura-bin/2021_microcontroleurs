@@ -32,25 +32,29 @@ TEMP16:	    DS 2
 
 PSECT code
 
-; RESULT16 = OP_LEFT8 * OP_RIGHT8
+
+
+; RESULT16 = OPL8 * OPR8
 MUL8:
+    clrf    TEMP8
+    bsf     TEMP8, 3
     clrf    RESULT16
-MUL8LOOP:
+    clrf    RESULT16+1
     movf    OPL8, w
-    btfsc   OPR8, 0
-    addwf   RESULT16
-    bcf	    CARRY
-    rrf	    OPR8, f
-    bcf	    CARRY
-    rlf	    OPL8, f
-    movf    OPR8, f
-    btfss   ZERO
-    goto    MUL8LOOP
+MUL8_LOOP:
+    rrf     OPR8, f
+    btfsc   CARRY
+    addwf   RESULT16+1, f
+    rrf     RESULT16+1, f
+    rrf     RESULT16, f
+    decfsz  TEMP8, f
+    goto    MUL8_LOOP
     return
 
 
-; Division: RESULT32 = OP_LEFT16 / OP_RIGHT16
+; Division: RESULT16 = OPL16 / OPR16
 DIV16:
+
     movf    OPR16, f
     btfss   ZERO
     goto    ZERO_TEST_SKIPPED
@@ -82,8 +86,8 @@ ZERO_TEST_SKIPPED:
     movlw   1
     movwf   TEMP16
     clrf    TEMP16+1
-    clrf    RESULT32
-    clrf    RESULT32+1
+    clrf    RESULT16
+    clrf    RESULT16+1
 SHIFT_IT16:
     bcf	    CARRY
     rlf	    TEMP16, f
@@ -101,11 +105,11 @@ DIVU16LOOP:
     goto    FINALX
 COUNTX:
     movf    TEMP16, w
-    addwf   RESULT32
+    addwf   RESULT16
     btfsc   CARRY
-    incf    RESULT32+1, f
+    incf    RESULT16+1, f
     movf    TEMP16+1, w
-    addwf   RESULT32+1
+    addwf   RESULT16+1
 FINALX:
     bcf	    CARRY
     rrf	    OPR16+1, f
@@ -118,7 +122,7 @@ FINALX:
     return
 
 
-; Multiplication: RESULT32 = OP_LEFT16 * OP_RIGHT16
+; Multiplication: RESULT32 = OPL16 * OPR16
 MUL16:
     clrf    RESULT32+3
     clrf    RESULT32+2

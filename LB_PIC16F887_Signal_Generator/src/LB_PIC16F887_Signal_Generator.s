@@ -26,6 +26,7 @@ CONFIG CP=OFF		; Program memory unprotected
 
 #include <xc.inc>
 #include "16bits_arithmetic.inc"
+#include "16bits_arithmetic_macros.inc"
 #include "16bits_bin_bcd_ascii.inc"
 #include "config.inc"
 #include "I2C.inc"
@@ -262,15 +263,15 @@ init:
     movwf	CCPR2L
 
     ; Set the signal default parameters
-    movlw	100	    ; amplitude -> 100%
+    movlw	100		    ; amplitude -> 100%
     movwf	amplitude
 
-    movlw	50	    ; duty cycle -> 50%
+    movlw	50		    ; duty cycle -> 50%
     movwf	duty_cycle
 
     INIT16	frequency, 1000	    ; frequency -> 1000kHz
     
-    clrf	wave_form   ; wave form -> square
+    clrf	wave_form	    ; wave form -> square
     bsf		WF_SQUARE
 
     ; Initialize the I2C bus and the attached peripherals
@@ -363,46 +364,92 @@ init_mode_config:
     return
 
 
-; Initialize a square signal
-; ==========================
+; Initialize a square signal (for i: 0 -> 100)
+; ===========================================
 init_square_signal:
-    clrf	cpt
-    clrf	signal
+    clrf	i
+
+    ; init the number of steps composing the high period
+    movf	duty_cycle, w
+    movwf	samples
     
-    movlw	0xFF		; max signal value
-    movwf	OPL8
-    ;movf	amplitude, w
-    movlw	100
-    movwf	OPR8
-    call	MUL8
-    ; copy the result to the 16 bit left operand
-    MOV16	OPL16, RESULT16
-    INIT16	OPR16, 100
-    call	DIV16
+    ; compute the signal value: max value * amplitude / 100
+    clrf	OPL16
+    movlw	0xFF		    ; max value
+    movwf	OPL16+1
+    clrf	OPR16
+    movf	amplitude, w	    ; * amplitude
+    movwf	OPR16+1
+    call	MUL16		    ; = RESULT16
+
+    MOV16	OPL16, RESULT32+2   ; RESULT16
+    INIT16	OPR16, 100	    ; / 100
+    call	DIV16		    ; = RESULT32 (<= 255)
     
-    movf	RESULT32+3, w
+    movf	RESULT16, w
     movwf	signal
     
-    ;INIT16	OP2, 100
-    MOV16	OPL16, amplitude
-    INIT16	OPR16, 0x00FF
-    call	MUL16
     
-    ; init the high period
-    ;movlw	duty_cycle
-    ;movwf	i
     
-    movlw	N_SAMPLES
-    movwf	i
-    clrf	cpt
+    movlw	0xFF		    ; max value
+    movwf	OPL8
+    movf	amplitude, w	    ; * amplitude
+    movwf	OPR8
     
-init_signal1:
-    SET_SIGNAL	cpt, signal
-    incf	cpt, f
-    decf	signal
-    decfsz	i, f
-    goto	init_signal1
     
+    clrf	OPL16
+    movlw	0xFF		    ; max value
+    movwf	OPL16+1
+    clrf	OPR16
+    movf	amplitude, w	    ; * amplitude
+    movwf	OPR16+1
+    call	MUL8		    ; = RESULT16
+    
+    
+    MOV16	VAR16, RESULT16
+    call	HEX16_TO_BCD_ASCII
+    movlw	LCD_LINE1
+    movwf	LCD_DATA
+    call	SEND_COMMAND_LCD
+    movf	BCD4, w
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movf	BCD3, w
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movf	BCD2, w
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movf	BCD1, w
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movf	BCD0, w
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    
+
+    
+    
+init_high_period:
+    SET_SIGNAL	i, signal
+    incf	i, f
+    decfsz	samples, f
+    goto	init_high_period
+    
+    ; set the number of steps composing the low period
+    movlw	100	    ; number of samples
+    movwf	samples
+    SUB16	samples, duty_cycle
+    
+    ; set the signal value to 0
+    clrf	signal
+
+init_low_period:
+    SET_SIGNAL	i, signal
+    incf	i, f
+    decfsz	samples, f
+    goto	init_low_period
+
     return
     
 ; Initialize a triangle signal
