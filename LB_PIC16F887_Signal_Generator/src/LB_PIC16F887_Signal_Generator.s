@@ -35,8 +35,9 @@ CONFIG CP=OFF		; Program memory unprotected
 #include "delay.inc"
 
 ; signal wave forms types implemented
-#define WF_SQUARE	wave_form, 1
-#define WF_TRIANGLE	wave_form, 0
+#define WF_SQUARE	wave_form, 2
+#define WF_TRIANGLE	wave_form, 1
+#define WF_SAWTOOTH	wave_form, 0
 
 ; application previous mode
 #define PREV_MODE	sig_info, 0
@@ -424,6 +425,20 @@ init_low_period:
 ; Initialize a triangle signal
 ; ==========================
 init_triangle_signal:
+    clrf	i
+
+    ; init the number of steps composing the high period
+    movf	duty_cycle, w
+    movwf	samples
+    
+    ; if samples = 0, go to low period configuration
+    movf	samples, f
+    btfsc	ZERO
+    goto	falling_edge
+
+    falling_edge:
+
+
     return
     
 ;init_signal:
@@ -481,6 +496,9 @@ set_amplitude_down:
 ; Increases the duty cycle value (step 10)
 ; ========================================
 set_duty_cycle_up:
+    btfsc	WF_SAWTOOTH
+    goto	max_duty_cycle
+
     ; test the max value (100)
     movlw	100
     subwf	duty_cycle, w
@@ -494,10 +512,18 @@ set_duty_cycle_up:
     ; then display the updated duty cycle value
     goto	display_duty_cycle
 
+max_duty_cycle:
+    movlw	100
+    movwf	duty_cycle
+    goto	display_duty_cycle
+
 
 ; Decreases duty cycle value (step 5)
 ; ===================================
 set_duty_cycle_down:
+    btfsc	WF_SAWTOOTH
+    goto	clear_duty_cycle
+
     ; substract the step value to the duty cycle
     movlw	10
     subwf	duty_cycle, w
@@ -508,6 +534,10 @@ set_duty_cycle_down:
     movwf	duty_cycle
 
     ; then display the updated duty cycle value
+    goto	display_duty_cycle
+
+clear_duty_cycle:
+    clrf	duty_cycle
     goto	display_duty_cycle
 
 
@@ -555,8 +585,15 @@ set_next_wave_form:
     ; then initialize the wave form to the first
     bsf		WF_SQUARE
 
-    ; display the wave form name
+    ; if the wave form is sawtooth
+    btfss	WF_SAWTOOTH
     goto	display_wave_form
+    call	display_wave_form
+
+    ; set the duty cycle to 100
+    movlw	100
+    movwf	duty_cycle
+    goto	display_duty_cycle
 
 
 ; Parameters display initialization
@@ -722,13 +759,47 @@ init_display:
 ; =============================
 display_wave_form:
     btfsc   WF_SQUARE
-    goto    display_wave_form_square
+    goto    display_wf_square
     btfsc   WF_TRIANGLE
-    goto    display_wave_form_triangle
-    
-; displays the wave form traingle
+    goto    display_wf_triangle
+    btfsc   WF_SAWTOOTH
+    goto    display_wf_sawtooth
+
+; displays the wave form sawtooth
 ; ===============================
-display_wave_form_triangle:
+display_wf_sawtooth:
+    movlw	0x8C
+    movwf	LCD_DATA
+    call	SEND_COMMAND_LCD
+    movlw	's'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	'a'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	'w'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	't'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	'o'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	'o'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	't'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    movlw	'h'
+    movwf	LCD_DATA
+    call	SEND_CHAR_LCD
+    return
+    
+; displays the wave form triangle
+; ===============================
+display_wf_triangle:
     movlw	0x8C
     movwf	LCD_DATA
     call	SEND_COMMAND_LCD
@@ -760,7 +831,7 @@ display_wave_form_triangle:
 
 ; displays the wave form square
 ; =============================
-display_wave_form_square:
+display_wf_square:
     movlw	0x8C
     movwf	LCD_DATA
     call	SEND_COMMAND_LCD
