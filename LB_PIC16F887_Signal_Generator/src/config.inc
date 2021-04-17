@@ -5,6 +5,11 @@
 #define DAC0808	    PORTD
 
 
+; I2C connections
+#define	I2C_SCL	    PORTC, 3	; I2C clock output PIN
+#define	I2C_SDA	    PORTC, 4	; I2C data output PIN
+
+
 ; I/O expander PCA9535 address: 0 0 1 0 A2 A1 A0 R/W
 #define PCA9535_LCD_ADD_W       0x40	; write mode
 ;#define PCA9535_LCD_ADD_R       0x41	; read mode
