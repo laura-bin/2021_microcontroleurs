@@ -373,74 +373,43 @@ init_square_signal:
     movf	duty_cycle, w
     movwf	samples
     
+    ; if samples = 0, go to low period configuration
+    movf	samples, f
+    btfsc	ZERO
+    goto	low_period
+    
     ; compute the signal value: max value * amplitude / 100
-    clrf	OPL16
     movlw	0xFF		    ; max value
-    movwf	OPL16+1
-    clrf	OPR16
+    movwf	OPL8
     movf	amplitude, w	    ; * amplitude
-    movwf	OPR16+1
-    call	MUL16		    ; = RESULT16
+    movwf	OPR8
+    call	MUL8		    ; = RESULT16
 
-    MOV16	OPL16, RESULT32+2   ; RESULT16
+    MOV16	OPL16, RESULT16	    ; RESULT16
     INIT16	OPR16, 100	    ; / 100
     call	DIV16		    ; = RESULT32 (<= 255)
     
     movf	RESULT16, w
     movwf	signal
-    
-    
-    
-    movlw	0xFF		    ; max value
-    movwf	OPL8
-    movf	amplitude, w	    ; * amplitude
-    movwf	OPR8
-    
-    
-    clrf	OPL16
-    movlw	0xFF		    ; max value
-    movwf	OPL16+1
-    clrf	OPR16
-    movf	amplitude, w	    ; * amplitude
-    movwf	OPR16+1
-    call	MUL8		    ; = RESULT16
-    
-    
-    MOV16	VAR16, RESULT16
-    call	HEX16_TO_BCD_ASCII
-    movlw	LCD_LINE1
-    movwf	LCD_DATA
-    call	SEND_COMMAND_LCD
-    movf	BCD4, w
-    movwf	LCD_DATA
-    call	SEND_CHAR_LCD
-    movf	BCD3, w
-    movwf	LCD_DATA
-    call	SEND_CHAR_LCD
-    movf	BCD2, w
-    movwf	LCD_DATA
-    call	SEND_CHAR_LCD
-    movf	BCD1, w
-    movwf	LCD_DATA
-    call	SEND_CHAR_LCD
-    movf	BCD0, w
-    movwf	LCD_DATA
-    call	SEND_CHAR_LCD
-    
 
-    
-    
+
 init_high_period:
     SET_SIGNAL	i, signal
     incf	i, f
     decfsz	samples, f
     goto	init_high_period
-    
-    ; set the number of steps composing the low period
-    movlw	100	    ; number of samples
+
+low_period:
+    ; set the number of steps composing the low period: number of samples - duty cycle
+    movlw	100
     movwf	samples
     SUB16	samples, duty_cycle
-    
+
+    ; if samples = 0, stop the configuration here
+    movf	samples, f
+    btfsc	ZERO
+    return
+
     ; set the signal value to 0
     clrf	signal
 
