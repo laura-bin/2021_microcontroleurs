@@ -33,6 +33,7 @@ CONFIG CP=OFF		; Program memory unprotected
 #include "LM044L_PCA9535.inc"
 #include "PCA9554.inc"
 #include "delay.inc"
+#include "signal_array.inc"
 
 ; signal wave forms types implemented
 #define WF_SQUARE	wave_form, 2
@@ -42,8 +43,6 @@ CONFIG CP=OFF		; Program memory unprotected
 ; application previous mode
 #define PREV_MODE	sig_info, 0
 
-#define N_SAMPLES	100
-
 
 ; Variables
 ; =========
@@ -52,102 +51,27 @@ PSECT udata_bank0
 ; Context saving variables
 w_temp:		DS 1
 status_temp:	DS 1
-; pclath_temp:	DS 1
+pclath_temp:	DS 1
 
 ; signal parameters
-amplitude:		DS 1
-duty_cycle:		DS 1
-frequency:		DS 2
-wave_form:		DS 1    ; (square, triangle or sawtooth)
+amplitude:	DS 1
+duty_cycle:	DS 1
+frequency:	DS 2
+wave_form:	DS 1    ; square, triangle or sawtooth (see define)
 
-; signal information kept in memory
-sig_info:		DS 1
-
-    
-    
-    
-
-signal16: DS 2
-
-i:  DS 1
-rising_inc: DS 1
-falling_inc: DS 1
-dir: DS 1		; sens de l'increment
-cpt: DS 1		; nombre constant d'increments
-signal: DS 1		; valeur courante du signal
-rising_steps: DS 1	; nombre de pas du front montant
-falling_steps: DS 1	; nombre de pas du front descendant
-samples:	DS 1	; nombre total d'echantillons -> samples
-v1: DS 1		; data send by keypad
-v2: DS 1		; previous v1
-app_mode: DS 1		; app mode char / mode RUN (1) or config (0)
-
+; signal working variables
+sig_info:	DS 1	; signal information kept in memory (see define)
+signal:		DS 1	; signal curent value
+max:		DS 1	; max signal value (defined by the signal amplitude)
+i:		DS 1	; signal array index
+samples:	DS 1	; number of samples iteration count
+falling_steps:	DS 1	; falling edge steps count (total samples - duty cycle)
 
 PSECT udata_bank1
-signal1: DS 50	    ; signal data vector 1/2
+signal1: DS 50		; signal data vector 1/2
 
 PSECT udata_bank2
-signal2: DS 50	    ; signal data vector 2/2
-
-
-
-; Get the element of the signal array at given index
-; the value is put in the W register
-; ==================================================
-GET_SIGNAL  MACRO   INDEX
-LOCAL GET_SIGNAL2		    ; LOCAL ensures the uniqueness of the labels defined in the macro 
-LOCAL GET_SIGNAL_END		    ; by adding a unique tag to the label address
-    movlw   50
-    subwf   (INDEX), w  
-    btfsc   CARRY		    ; if the index is greater than 50
-    goto    GET_SIGNAL2		    ; goto the second part of the array (in bank 2)
-    bcf	    STATUS, 7		    ; clear IRP to select bank 1
-    movlw   signal1		    ; move the array pointer value
-    movwf   FSR			    ; to FSR
-    movf    (INDEX), w
-    addwf   FSR, f		    ; add the index value to the pointer
-    movf    INDF, w		    ; move the data at this position to the W register
-    goto    GET_SIGNAL_END
-GET_SIGNAL2:
-    bsf	    STATUS, 7		    ; set IRP to select bank 2
-    movlw   BANKMASK(signal2)	    ; get the correct pointer on the array (7bits -> 8bits)
-    movwf   FSR			    ; and move it to FSR
-    movlw   50
-    subwf   (INDEX), w		    ; adjust index
-    addwf   FSR, f		    ; and add the index value to the pointer
-    movf    INDF, w		    ; move the data at this position to the W register
-GET_SIGNAL_END:
-ENDM
-
-
-; Set the element of the signal array at given index
-; ==================================================
-SET_SIGNAL  MACRO   INDEX, VALUE
-LOCAL SET_SIGNAL2
-LOCAL SET_SIGNAL_END
-    movlw   50
-    subwf   INDEX, w
-    btfsc   CARRY		    ; if the index is greater than 50
-    goto    SET_SIGNAL2		    ; go to the second part of the array (in bank 2)
-    bcf	    STATUS, 7		    ; select bank 1
-    movlw   signal1		    ; move the pointer of the array
-    movwf   FSR			    ; in FSR
-    movf    INDEX, w
-    addwf   FSR, f		    ; add the index value		
-    movf    VALUE, w
-    movwf   INDF		    ; set the value
-    goto    SET_SIGNAL_END
-SET_SIGNAL2:
-    bsf	    STATUS, 7		    ; select bank 2
-    movlw   BANKMASK(signal2)	    ; move the pointer of the array
-    movwf   FSR			    ; in FSR
-    movlw   50
-    subwf   INDEX, w		    ; adjust index
-    addwf   FSR, f		    ; and add the index value to the pointer
-    movf    VALUE, w
-    movwf   INDF		    ; set the value
-SET_SIGNAL_END:
-ENDM
+signal2: DS 50		; signal data vector 2/2
 
 
 ; Reset vector
@@ -160,67 +84,64 @@ resetVec:
 ; ===================
 PSECT interVec, class=CODE, delta=2
 interVec:
-    ; Save w and STATUS registers
+    ; Save W, STATUS an PCLATH registers
     ; swaps are used because they do not affect the status bits
     movwf	w_temp
     swapf	STATUS, w
     movwf	status_temp
-    ; Uncomment if PCLATH register is used
-    ;movf    PCLATH, w
-    ;movwf   pclath_temp
-    ;clrf    PCLATH
+    movf	PCLATH, w
+    movwf	pclath_temp
+    clrf	PCLATH
 
     ; Test the interrupt flag
-    btfsc   CCP2IF
-    goto    generate_signal
+    banksel	PIR2
+    btfsc	CCP2IF
+    goto	generate_signal
 
 read_inputs:
     ; Test the data read by the PCA9554 to set the selected parameter
-    call    READ_PCA9554
-    btfss   AMPL_UP
-    call    set_amplitude_up
-    btfss   AMPL_DOWN
-    call    set_amplitude_down
-    btfss   DC_UP
-    call    set_duty_cycle_up
-    btfss   DC_DOWN
-    call    set_duty_cycle_down
-    btfss   FREQ_UP
-    call    set_frequency_up
-    btfss   FREQ_DOWN
-    call    set_frequency_down
-    btfss   NEXT_WAVE_FORM
-    call    set_next_wave_form
+    call	READ_PCA9554
+    btfss	AMPL_UP
+    call	set_amplitude_up
+    btfss	AMPL_DOWN
+    call	set_amplitude_down
+    btfss	DC_UP
+    call	set_duty_cycle_up
+    btfss	DC_DOWN
+    call	set_duty_cycle_down
+    btfss	FREQ_UP
+    call	set_frequency_up
+    btfss	FREQ_DOWN
+    call	set_frequency_down
+    btfss	NEXT_WAVE_FORM
+    call	set_next_wave_form
 
     ; Clear the interrupt flag
-    bcf	    INTF
-    goto    end_inter
-    
-generate_signal:
-    GET_SIGNAL	cpt
-    movwf	DAC0808
-    incf	cpt, f
-    movlw	N_SAMPLES
-    subwf	cpt, w
-    btfsc	ZERO
-    clrf	cpt
+    bcf		INTF
+    goto	end_inter
 
-    ;btfss   PORTC, 5
-    ;bsf	    PORTC, 5
-    ;btfsc   PORTC, 5
-    ;bcf	    PORTC, 5
-    bcf	    CCP2IF
-    goto    end_inter 
+generate_signal:
+    ; Set the signal value on the DAC
+    GET_SIGNAL	i	    ; get signal value from the array at index i
+    movwf	DAC0808	    ; move it to the DAC
+    incf	i, f	    ; increment the index
+    movlw	100
+    subwf	i, w
+    btfsc	ZERO	    ; if i = 100
+    clrf	i	    ; i = 0
+
+    ; Clear the interrupt flag
+    bcf		CCP2IF
 
 end_inter:
-    ; Restore w and STATUS registers (& Bank Select Bit register)
-    ;movf    pclath_temp, w
-    ;movf    pclath_temp, w
-    ;movwf   PCLATH
-    swapf   status_temp, w
-    movwf   STATUS
-    swapf   w_temp, f
-    swapf   w_temp, w
+    ; Restore W, STATUS an PCLATH registers (& Bank Select Bit register)
+    movf	pclath_temp, w
+    movf	pclath_temp, w
+    movwf	PCLATH
+    swapf	status_temp, w
+    movwf	STATUS
+    swapf	w_temp, f
+    swapf	w_temp, w
     retfie
 
 
@@ -309,40 +230,44 @@ main:
 ; Signal generation mode
 ; ======================
 signal_gen:
-    btfss   PREV_MODE		; if the mode has just been changed
-    call    init_mode_run	; initialize the run mode
-    goto    main		; wait for the CCP2 interruption to happen
+    btfss	PREV_MODE	    ; if the mode has just been changed
+    call	init_mode_run	    ; initialize the run mode
+    goto	main		    ; wait for the CCP2 interruption to happen
 
 
 ; Signal configuration mode
 ; =========================
 signal_config:
-    btfsc   PREV_MODE		; if the mode has just been changed
-    call    init_mode_config	; initialize the configuration mode
-    goto    main		; wait for the RB0 interruption to happen
+    btfsc	PREV_MODE	    ; if the mode has just been changed
+    call	init_mode_config    ; initialize the configuration mode
+    goto	main		    ; wait for the RB0 interruption to happen
 
 
 ; Run mode initialization
 ; =======================
 init_mode_run:
-    banksel	INTCON	    ; disable all the interruptions
+    banksel	INTCON		    ; disable all the interruptions
     clrf	INTCON
 
-    bsf		LED_RUN	    ; switch on the LED
-    bsf		PREV_MODE   ; set the previous mode to RUN
+    bsf		LED_RUN		    ; switch on the LED
+    bsf		PREV_MODE	    ; set the previous mode to RUN
     
     btfsc	WF_SQUARE		; if the selected signal wave form is square
     call	init_square_signal	; init the square signal
     btfsc	WF_TRIANGLE		; if the selected signal wave form is triangle
     call	init_triangle_signal	; init the triangle signal
+    btfsc	WF_SAWTOOTH		; if the selected signal wave form is sawtooth
+    call	init_sawtooth_signal	; init the sawtooth signal
+    
+    clrf	i		    ; signal array index = 0
 
     ; Enable the CCP2 interruption
     banksel	PIE2
-    bsf		CCP2IE	    ; enable CCP2 interruptions
+    bsf		CCP2IE		    ; enable CCP2 interruptions
     banksel	INTCON
-    bcf		CCP2IF	    ; clear CCP2 interrupt flag
-    bsf		PEIE	    ; enable peripherical interruptions
-    bsf		GIE	    ; enable global interruptions
+    bcf		CCP2IF		    ; clear CCP2 interrupt flag
+    bsf		PEIE		    ; enable peripherical interruptions
+    bsf		GIE		    ; enable global interruptions
 
     return
 
@@ -350,11 +275,13 @@ init_mode_run:
 ; Configuration mode initialization
 ; =================================
 init_mode_config:
-    banksel	INTCON	    ; disable all the interruptions
+    banksel	INTCON		    ; disable all the interruptions
     clrf	INTCON
 
-    bcf		LED_RUN	    ; switch off the LED
-    bcf		PREV_MODE   ; set the previous mode to CONFIG
+    bcf		LED_RUN		    ; switch off the LED
+    bcf		PREV_MODE	    ; set the previous mode to CONFIG
+    
+    bsf		LED_RUN
 
     ; Enable interruption on RB0
     banksel	INTCON
@@ -365,46 +292,35 @@ init_mode_config:
     return
 
 
-; Initialize a square signal (for i: 0 -> 100)
-; ===========================================
+; Initialize a square signal
+; ==========================
 init_square_signal:
     clrf	i
 
-    ; init the number of steps composing the high period
-    movf	duty_cycle, w
-    movwf	samples
-    
-    ; if samples = 0, go to low period configuration
-    movf	samples, f
+    ; if the high period samples (duty cycle) = 0, go to low period configuration
+    movf	duty_cycle, f
     btfsc	ZERO
     goto	low_period
-    
-    ; compute the signal value: max value * amplitude / 100
-    movlw	0xFF		    ; max value
-    movwf	OPL8
-    movf	amplitude, w	    ; * amplitude
-    movwf	OPR8
-    call	MUL8		    ; = RESULT16
 
-    MOV16	OPL16, RESULT16	    ; RESULT16
-    INIT16	OPR16, 100	    ; / 100
-    call	DIV16		    ; = RESULT32 (<= 255)
-    
-    movf	RESULT16, w
-    movwf	signal
+    ; init the high period loop condition
+    movf	duty_cycle, w
+    movwf	samples
 
+    ; compute the max signal value
+    call	compute_max
 
 init_high_period:
-    SET_SIGNAL	i, signal
-    incf	i, f
-    decfsz	samples, f
-    goto	init_high_period
+    SET_SIGNAL	i, max		    ; array[i] = signal value
+    incf	i, f		    ; i++
+    decfsz	samples, f	    ; samples--
+    goto	init_high_period    ; if samples > 0 -> loop
 
 low_period:
-    ; set the number of steps composing the low period: number of samples - duty cycle
+    ; low period samples = 100 - duty cycle
     movlw	100
     movwf	samples
-    SUB16	samples, duty_cycle
+    movf	duty_cycle, w
+    subwf	samples, f
 
     ; if samples = 0, stop the configuration here
     movf	samples, f
@@ -415,49 +331,161 @@ low_period:
     clrf	signal
 
 init_low_period:
-    SET_SIGNAL	i, signal
-    incf	i, f
-    decfsz	samples, f
-    goto	init_low_period
+    SET_SIGNAL	i, signal	    ; array[i] = 0
+    incf	i, f		    ; i++
+    decfsz	samples, f	    ; samples--
+    goto	init_low_period	    ; if samples > 0 -> loop
 
     return
-    
+
+
 ; Initialize a triangle signal
-; ==========================
+; ============================
 init_triangle_signal:
     clrf	i
 
-    ; init the number of steps composing the high period
+    ; if the rising edge samples (duty cycle) = 0, go to sawtooth signal initialization
+    movf	duty_cycle, f
+    btfsc	ZERO
+    goto	init_sawtooth_signal
+
+    ; if the falling edge samples = 0, go to sawtooth signal initialization
+    movlw	100		    ; falling edge steps = 100
+    movwf	falling_steps
+    movf	duty_cycle, w	    ; - duty cycle
+    subwf	falling_steps, f
+
+    movf	falling_steps, f
+    btfsc	ZERO
+    goto	init_sawtooth_signal
+
+    ; compute the max signal value
+    call	compute_max
+
+    ; initialize the rising edge loop condition
     movf	duty_cycle, w
     movwf	samples
-    
-    ; if samples = 0, go to low period configuration
-    movf	samples, f
-    btfsc	ZERO
-    goto	falling_edge
 
-    falling_edge:
+set_rising_edge:
+    ; signal value = max * i / rising edge steps
+    movf	max, w		    ; max
+    movwf	OPL8
+    movf	i, w		    ; * i
+    movwf	OPR8
+    call	MUL8		    ; = RESULT16
 
+    MOV16	OPL16, RESULT16	    ; RESULT16
+    clrf	OPR16+1
+    movf	duty_cycle, w
+    movwf	OPR16		    ; / rising steps
+    call	DIV16		    ; = RESULT16 (<= 255)
+
+    SET_SIGNAL	i, RESULT16	    ; array [i] = signal value
+    incf	i, f		    ; i++
+    decfsz	samples, f	    ; samples--
+    goto	set_rising_edge	    ; if samples != 0 -> loop
+
+    ; initialize the falling edge loop condition
+    movf	falling_steps, w
+    movwf	samples
+
+set_falling_edge:
+    ; signal value = max * samples / falling steps
+    movf	max, w		    ; max
+    movwf	OPL8
+    movf	samples, w	    ; * samples
+    movwf	OPR8
+    call	MUL8		    ; = RESULT16x
+
+    MOV16	OPL16, RESULT16	    ; RESULT16
+    clrf	OPR16+1
+    movf	falling_steps, w    ; / falling steps
+    movwf	OPR16
+    call	DIV16		    ; RESULT16 (<= 255)
+
+    SET_SIGNAL	i, RESULT16	    ; array[i] = signal value
+    incf	i, f		    ; i++
+    decfsz	samples, f	    ; samples--
+    goto	set_falling_edge    ; if samples != 0 -> loop
 
     return
-    
-;init_signal:
-;    movlw	N_SAMPLES
-;    movwf	i
-;    clrf	cpt
-;    clrf	signal
-;init_signal1:
-;    SET_SIGNAL	cpt, signal
-;    incf	cpt, f
-;    incf	signal
-;    decfsz	i, f
-;    goto	init_signal1
-;    return
 
 
+; Initialize a sawtooth signal
+; ============================
+init_sawtooth_signal:
+    clrf	i
+
+    ; initialize loop condition
+    movlw	100		    ; loop for i = 0
+    movwf	samples		    ; while i < 100
+
+    ; compute the max signal value
+    call	compute_max
+
+    ; set rising or falling sawtooth signl depending on the duty cycle
+    movf	duty_cycle, f
+    btfsc	ZERO			; if duty cycle = 0
+    goto	set_falling_sawtooth	; generate a reversed sawtooth signal
+
+set_rising_sawtooth:
+    ; compute the signal value = max * i / 100
+    movf	max, w		    ; max
+    movwf	OPL8
+    movf	i, w		    ; * i
+    movwf	OPR8
+    call	MUL8		    ; = RESULT16
+
+    MOV16	OPL16, RESULT16	    ; RESULT16
+    INIT16	OPR16, 100	    ; / 100
+    call	DIV16		    ; = RESULT16 (<= 255)
+
+    SET_SIGNAL	i, RESULT16
+    incf	i, f
+    decfsz	samples, f
+    goto	set_rising_sawtooth
+
+    return
+
+set_falling_sawtooth:
+    ; compute the signal value = max * samples / 100
+    movf	max, w		    ; max
+    movwf	OPL8
+    movf	samples, w	    ; * samples
+    movwf	OPR8
+    call	MUL8		    ; = RESULT16
+
+    MOV16	OPL16, RESULT16	    ; RESULT16
+    INIT16	OPR16, 100	    ; / 100
+    call	DIV16		    ; = RESULT16 (<= 255)
+
+    SET_SIGNAL	i, RESULT16
+    incf	i, f
+    decfsz	samples, f
+    goto	set_falling_sawtooth
+
+    return
 
 
+; Compute the max signal value
+; the result is placed in the max variable
+; ========================================
+compute_max:
+    ; max signal value = 255 * amplitude / 100
+    movlw	0xFF		    ; 255
+    movwf	OPL8
+    movf	amplitude, w	    ; * amplitude
+    movwf	OPR8
+    call	MUL8		    ; = RESULT16
 
+    MOV16	OPL16, RESULT16	    ; RESULT16
+    INIT16	OPR16, 100	    ; / 100
+    call	DIV16		    ; = RESULT16 (<= 255)
+
+    movf	RESULT16, w
+    movwf	max		    ; max = RESULT16 lowest byte
+
+    return
 
 
 ; Increases the amplitude value (step 10)
