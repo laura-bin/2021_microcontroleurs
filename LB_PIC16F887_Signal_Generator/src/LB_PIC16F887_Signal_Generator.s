@@ -94,7 +94,6 @@ interVec:
     clrf	PCLATH
 
     ; Test the interrupt flag
-    banksel	PIR2
     btfsc	CCP2IF
     goto	generate_signal
 
@@ -191,7 +190,7 @@ init:
     movlw	50		    ; duty cycle -> 50%
     movwf	duty_cycle
 
-    INIT16	frequency, 1000	    ; frequency -> 1000kHz
+    INIT16	frequency, 1000	    ; frequency -> 1000Hz
     
     clrf	wave_form	    ; wave form -> square
     bsf		WF_SQUARE
@@ -211,11 +210,8 @@ init:
 
     ; Set the selected mode
     btfsc	MODE
-    call	init_mode_run
-    btfss	MODE
-    call	init_mode_config
-
-    goto	main
+    goto	init_mode_run
+    goto	init_mode_config
 
 
 ; Main loop: RUN/CONFIG switch polling
@@ -231,7 +227,7 @@ main:
 ; ======================
 signal_gen:
     btfss	PREV_MODE	    ; if the mode has just been changed
-    call	init_mode_run	    ; initialize the run mode
+    goto	init_mode_run	    ; initialize the run mode
     goto	main		    ; wait for the CCP2 interruption to happen
 
 
@@ -239,7 +235,7 @@ signal_gen:
 ; =========================
 signal_config:
     btfsc	PREV_MODE	    ; if the mode has just been changed
-    call	init_mode_config    ; initialize the configuration mode
+    goto	init_mode_config    ; initialize the configuration mode
     goto	main		    ; wait for the RB0 interruption to happen
 
 
@@ -248,6 +244,7 @@ signal_config:
 init_mode_run:
     banksel	INTCON		    ; disable all the interruptions
     clrf	INTCON
+    bcf		INTF
 
     bsf		LED_RUN		    ; switch on the LED
     bsf		PREV_MODE	    ; set the previous mode to RUN
@@ -269,7 +266,7 @@ init_mode_run:
     bsf		PEIE		    ; enable peripherical interruptions
     bsf		GIE		    ; enable global interruptions
 
-    return
+    goto	main
 
 
 ; Configuration mode initialization
@@ -277,19 +274,18 @@ init_mode_run:
 init_mode_config:
     banksel	INTCON		    ; disable all the interruptions
     clrf	INTCON
+    bcf		CCP2IF
 
     bcf		LED_RUN		    ; switch off the LED
     bcf		PREV_MODE	    ; set the previous mode to CONFIG
-    
-    bsf		LED_RUN
 
     ; Enable interruption on RB0
     banksel	INTCON
-    bcf		INTF
+    bsf		INTF
     bsf		INTE
     bsf		GIE
 
-    return
+    goto	main
 
 
 ; Initialize a square signal
@@ -492,6 +488,7 @@ compute_max:
 ; =======================================
 set_amplitude_up:
     ; test the max value (100)
+    bcf		CARRY
     movlw	100
     subwf	amplitude, w
     btfsc	CARRY
@@ -509,6 +506,7 @@ set_amplitude_up:
 ; =======================================
 set_amplitude_down:
     ; substract the step value to the amplitude
+    bcf		CARRY
     movlw	10
     subwf	amplitude, w
     btfss	CARRY
@@ -528,6 +526,7 @@ set_duty_cycle_up:
     goto	max_duty_cycle
 
     ; test the max value (100)
+    bcf		CARRY
     movlw	100
     subwf	duty_cycle, w
     btfsc	CARRY
@@ -553,6 +552,7 @@ set_duty_cycle_down:
     goto	clear_duty_cycle
 
     ; substract the step value to the duty cycle
+    bcf		CARRY
     movlw	10
     subwf	duty_cycle, w
     btfss	CARRY
@@ -569,35 +569,56 @@ clear_duty_cycle:
     goto	display_duty_cycle
 
 
-; Increases the frequency value (step 50)
-; =======================================
+; Increases the frequency value
+; by decreasing the timer 1 prescaler value
+; =========================================
 set_frequency_up:
-    ; test the max value (1050)
-    SUBI16	frequency, 1050
-    btfsc	CARRY
-    goto	end_frequency_up
-    goto	add_frequency_step
-end_frequency_up:
-    ADDI16	frequency, 1050
-    return
-add_frequency_step:
-    ADDI16	frequency, 1100
+    btfsc	T1CON, 5
+    goto	fu_test_T4		; if 1x
+    btfss	T1CON, 4
+    return				; if 00
+    bcf		T1CON, 4		; if 01 -> 00
+    goto	lsl_frequency
+
+fu_test_T4:
+    btfss	T1CON, 4
+    goto	fu_switch_T45		; if 10 -> 01
+    bcf		T1CON, 4		; if 11 -> 10
+    goto	lsl_frequency
+
+fu_switch_T45:
+    bcf		T1CON, 5
+    bsf		T1CON, 4
+
+lsl_frequency:
+    LSL16	frequency
     goto	display_frequency
 
 
-; Decreases the frequency value (step 50)
-; =======================================
+; Decreases the frequency value
+; by increasing the timer 1 prescaler value
+; =========================================
 set_frequency_down:
-    ; substract the step value to the frequency
-    SUBI16	frequency, 50
-    btfsc	CARRY
+    btfss	T1CON, 5
+    goto	fd_test_T4	    ; if 0x
+    btfsc	T1CON, 4
+    return			    ; if 11 -> return
+    bsf		T1CON, 4	    ; if 10 -> 11
+    goto	lsr_frequency
 
-    ; if the result is greater than or equal to 0, display the updated frequency value
+fd_test_T4:
+    btfsc	T1CON, 4
+    goto	fd_switch_T45	    ; if 01 -> 10
+    bsf		T1CON, 4	    ; if 00 -> 01
+    goto	lsr_frequency
+
+fd_switch_T45:
+    bsf		T1CON, 5    
+    bcf		T1CON, 4
+
+lsr_frequency:
+    LSR16	frequency	    ; frequency / 2
     goto	display_frequency
-
-    ; else reverse the substraction and return
-    ADDI16	frequency, 50
-    return
 
 
 ; Sets the next wave form: square -> triangle -> square...
@@ -613,10 +634,12 @@ set_next_wave_form:
     ; then initialize the wave form to the first
     bsf		WF_SQUARE
 
+    ; display the wave form
+    call	display_wave_form
+
     ; if the wave form is sawtooth
     btfss	WF_SAWTOOTH
-    goto	display_wave_form
-    call	display_wave_form
+    return
 
     ; set the duty cycle to 100
     movlw	100
@@ -689,12 +712,9 @@ init_display:
     movwf	LCD_DATA
     call	SEND_CHAR_LCD
 
-    movlw	0xD1
+    movlw	0xD2
     movwf	LCD_DATA
     call	SEND_COMMAND_LCD
-    movlw	'k'
-    movwf	LCD_DATA
-    call	SEND_CHAR_LCD
     movlw	'H'
     movwf	LCD_DATA
     call	SEND_CHAR_LCD
@@ -894,12 +914,9 @@ display_wf_square:
 display_frequency:
     MOV16	VAR16, frequency
     call	HEX16_TO_BCD_ASCII
-    movlw	0xCC
+    movlw	0xCE
     movwf	LCD_DATA
     call	SEND_COMMAND_LCD
-    movf	BCD4, w
-    movwf	LCD_DATA
-    call	SEND_CHAR_LCD
     movf	BCD3, w
     movwf	LCD_DATA
     call	SEND_CHAR_LCD
