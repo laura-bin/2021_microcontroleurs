@@ -1,3 +1,7 @@
+; LCD LM044L via PCA9535 16 bits I/O expander
+;
+; Laura Binacchi - SLP 2020/2021
+; ==============================================================================
 
 #include <xc.inc>
 

@@ -1,3 +1,7 @@
+; Delay function for 20MHz oscillator
+;
+; Laura Binacchi - SLP 2020/2021
+; ==============================================================================
 
 #include <xc.inc>
     

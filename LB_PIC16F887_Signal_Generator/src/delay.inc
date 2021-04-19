@@ -1,4 +1,7 @@
-; Delay function for 4MHz oscillator
+; Delay function for 20MHz oscillator
+;
+; Laura Binacchi - SLP 2020/2021
+; ==============================================================================
 
 ; Functions
 ; =========

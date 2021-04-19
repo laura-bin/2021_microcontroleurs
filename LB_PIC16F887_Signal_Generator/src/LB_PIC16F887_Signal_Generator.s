@@ -2,13 +2,14 @@
 ; ========================================================
 ;
 ; PIC16F887 (20MHz clock - 5MHz/0.2us Tcy)
-; Proteus : LB_PIC16F887_Signal_Generator_v1
+; Proteus : LB_PIC16F887_Signal_Generator
 ;
 ; Linker options:
 ;   -presetVec=0x00
 ;   -pinterVec=0x04
 ;
 ; Laura Binacchi - SLP 2020/2021
+; ==============================================================================
 
 
 ; PIC configuration
@@ -278,6 +279,8 @@ init_mode_config:
 
     bcf		LED_RUN		    ; switch off the LED
     bcf		PREV_MODE	    ; set the previous mode to CONFIG
+    
+    clrf	DAC0808		    ; set PORTD to 0
 
     ; Enable interruption on RB0
     banksel	INTCON

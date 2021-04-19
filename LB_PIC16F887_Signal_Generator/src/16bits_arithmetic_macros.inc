@@ -1,5 +1,10 @@
 ; 16 bits arithmetic macros
 ; little endian format (LSB stored in VALUE and MSB in (VALUE)+1
+;
+; if 16_bits_arithmetic.inc is not included in the program,
+; the variable TEMP16 (2 bytes) must be declared in the main program
+;
+; Laura Binacchi - SLP 2020/2021
 ; ==============================================================================
 
 ; Initialize a variable with a constant 16 bits value
@@ -13,7 +18,7 @@ INIT16	MACRO	VAR, CONST
 ENDM
 
 
-; Clears a variable
+; Clear a variable
 CLR16	MACRO	VAR
     clrf    (VAR)
     clrf    (VAR)+1
@@ -29,7 +34,7 @@ MOV16	MACRO	DST, SRC
 ENDM
 
 
-; Compare VAL1 to VAL2
+; Compare VAL1 and VAL2
 ;   VAL1 = VAL2 -> Z true
 ;   VAL1 > VAL2 -> C true
 ;   VAL1 < VAL2 -> C false

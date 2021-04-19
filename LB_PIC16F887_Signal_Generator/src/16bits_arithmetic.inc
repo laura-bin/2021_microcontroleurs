@@ -1,4 +1,6 @@
 ; 16 bits arithmetic functions
+;
+; Laura Binacchi - SLP 2020/2021
 ; ==============================================================================
 
 ; Functions

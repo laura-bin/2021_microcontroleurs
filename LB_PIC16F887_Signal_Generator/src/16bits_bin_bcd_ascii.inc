@@ -1,5 +1,8 @@
 ; Hexadecimal to ASCII and to BCD ASCII functions and variables
 ; used to display hexadecimal values, converted to BCD or not, on an LCD display
+;
+; Laura Binacchi - SLP 2020/2021
+; ==============================================================================
 
 ; Functions
 ; =========

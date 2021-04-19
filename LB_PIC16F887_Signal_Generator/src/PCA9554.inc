@@ -1,3 +1,7 @@
+; PCA9554 8 bits I/O expander configured for input reading
+;
+; Laura Binacchi - SLP 2020/2021
+; ==============================================================================
 
 ; Functions
 ; =========

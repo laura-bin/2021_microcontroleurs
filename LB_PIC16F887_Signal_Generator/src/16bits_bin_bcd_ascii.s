@@ -1,3 +1,7 @@
+; Hexadecimal to ASCII and to BCD ASCII functions implementation
+;
+; Laura Binacchi - SLP 2020/2021
+; ==============================================================================
 
 #include <xc.inc>
 

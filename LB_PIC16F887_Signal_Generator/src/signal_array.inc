@@ -1,7 +1,8 @@
-; signal array access macros
+; Signal array access macros
 ; needs a define of signal1 (50 bytes in bank 1) and signal 2 (50 bytes in bank 2)
-; ========================================================
-
+;
+; Laura Binacchi - SLP 2020/2021
+; ==============================================================================
 
 ; Get the element of the signal array at given index
 ; the value is put in the W register

@@ -1,4 +1,7 @@
-; 16 bits arithmetic unsigned multiplication and division
+; 16 bits arithmetic functions implementation
+;
+; Laura Binacchi - SLP 2020/2021
+; ==============================================================================
 
 #include <xc.inc>
 
@@ -32,8 +35,6 @@ TEMP16:	    DS 2
 
 PSECT code
 
-
-
 ; RESULT16 = OPL8 * OPR8
 MUL8:
     clrf    TEMP8
@@ -54,7 +55,18 @@ MUL8_LOOP:
 
 ; Division: RESULT16 = OPL16 / OPR16
 DIV16:
+    ; if OPL = 0 -> RESULT16 = 0
+    movf    OPL16, f
+    btfss   ZERO
+    goto    DIV16_INIT
+    movf    OPL16+1, f
+    btfss   ZERO
+    goto    DIV16_INIT
+    clrf    RESULT16
+    clrf    RESULT16+1
+    return
 
+DIV16_INIT:
     movf    OPR16, f
     btfss   ZERO
     goto    ZERO_TEST_SKIPPED
