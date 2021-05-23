@@ -10,7 +10,7 @@
  ******************************************************************************/
 
 /* Crystal frequency */
-#define _XTAL_FREQ  40000000UL      // 10MHz Clock - 10MHz cycle
+#define _XTAL_FREQ  40000000UL      // 10MHz HSPLL
 
 /* SSP interrupt flag */
 #define SSPIF       PIR1bits.SSP1IF
@@ -78,6 +78,7 @@ void send_char_LCD(char ch);
  * Sends a text to the LM044L alphanumeric LCD
  * 
  * @param text: text to display
- * @param line: line on which display the text
+ * @param row: row [0-3]
+ * @param col: col [0-19]
  */
-void send_text_LCD(char *text, int line);
+void send_text_LCD(char *text, char row, char col);

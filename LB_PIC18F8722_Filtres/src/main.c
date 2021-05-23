@@ -2,6 +2,23 @@
  * Dossier filtres sur PIC18F8722
  * ==============================
  * 
+ * Moving average filter:
+ *  - sampling frequency (8 or 16kHz)
+ *  - value (2, 4 or 8)
+ * 
+ * Low-pass filter:
+ *  - sampling frequency (8 or 16kHz)
+ *  - cutoff frequency
+ * 
+ * High-pass filter:
+ *  - sampling frequency (8 or 16kHz)
+ *  - cutoff frequency
+ * 
+ * Echo filter:
+ *  - sampling frequency (8 or 16kHz)
+ *  - delay
+ *  - number of echoes
+ * 
  * PIC18F8722
  * Proteus: PIC18F8722_Filtres (10MHz HSPLL)
  * 
@@ -89,11 +106,74 @@
 #include "config.h"
 #include "LM044L_MCP23S17_SPI.h"
 
-#define DAC0808 PORTD           // output signal on the DAC0808
-#define SIG_IN  PORTA, 0        // input signal
+#define DAC0808 PORTD                // output signal on the DAC0808
+#define SIG_IN  PORTAbits.RA0        // input signal
+
+#define SW_RUN          PORTEbits.RE0   // RUN / CONFIG mode switch
+#define PB_PREV_MENU    PORTEbits.RE1   // previous menu entry selection push button (NC)
+#define PB_NEXT_MENU    PORTEbits.RE2   // next menu entry selection push button (NC)
+#define PB_VALUE_DN     PORTEbits.RE3   // value down push button (NC)
+#define PB_VALUE_UP     PORTEbits.RE4   // value up push button (NC)
+
+#define TICK            PORTGbits.RG0   // debug tick measuring the processing time of the interruption
+
+// running modes
+#define MODE_NONE       0       // no mode selected
+#define MODE_RUN        1       // run mode
+#define MODE_CONFIG     2       // filter configuration mode
+
+// menu entries
+#define M_FILTER        0       // filter type selection
+#define M_SAMPLING      1       // sampling frequency selection
+#define M_VALUE         2       // filter value selection
+#define M_VALUE2        3       // filter second value selection (used by the echo filter)
+#define M_COUNT         3       // count of menu entries
+#define M_ECHO_COUNT    4       // count of menu entries for the echo filter
+
+// filters
+#define F_MOV_AVG       0       // moving average filter
+#define F_LOW_PASS      1       // low-pass filter
+#define F_HIGH_PASS     2       // high-pass filter
+#define F_ECHO          3       // echo filter
+#define F_COUNT         4       // count of filters
+
+// limit values
+#define F_MOV_AVG_MIN   1       // moving average filter min value (2^1)
+#define F_MOV_AVG_MAX   3       // moving average filter max value (2^3)
+#define F_LOW_PASS_MIN  0       // low-pass filter min value
+#define F_HIGH_PASS_MIN 0       // high-pass filter min value
+#define F_ECHO_MIN      50      // echo filter min delay value
+#define F_ECHO_MAX      500     // echo filter max delay value
+#define F_ECHO_MIN2     1       // echo filter min number of echoes
+#define F_ECHO_MAX2     3       // echo filter max number of echoes
+#define SAMPLING_MIN    8000    // sampling frequency min value
+#define SAMPLING_MAX    16000   // sampling frequency max value
+
+// steps
+#define F_HL_PASS_STEP  100
+#define F_ECHO_STEP     10
 
 /* Global variables (used by interruption & main program) */
 unsigned X0 = 0, Xmin = 255, Xmax = 0;
+
+char prev_mode;             // previous run/config mode value
+char menu_entry;            // current menu entry selected
+char filter;                // current filter selected
+unsigned sampling;          // sampling frequency (8000 or 16000 Hz)
+char mov_avg_value;         // moving average filter value (2, 4 or 8)
+unsigned low_cutoff;        // low-pass filter cutoff frequency
+unsigned high_cutoff;       // high-pass filter cutoff frequency
+unsigned echo_delay;        // echo filter delay
+char echoes;                // echo filter number of echoes (1, 2 or 3)
+
+// update and display the parameters
+void display_parameters(void);
+void update_sampling_frequency(unsigned new_val);
+void update_mov_avg_value(char new_val);
+void update_low_cutoff(unsigned new_val);
+void update_high_cutoff(unsigned new_val);
+void update_echo_delay(unsigned new_val);
+void update_echoes(char new_val);
 
 void __interrupt(high_priority) Int_Vect_High(void) {
     TICK = 1;
@@ -106,61 +186,60 @@ void __interrupt(high_priority) Int_Vect_High(void) {
     if (X0 < Xmin) Xmin = X0;
     if (X0 > Xmax) Xmax = X0;
     
-    if (PORTEbits.RE0) DAC0808 = X0;
+    if (PORTEbits.RE0) DAC0808 = (unsigned char) X0;
 
     TICK = 0;
     
     PIR2bits.CCP2IF = 0;
 }
 
+
 /**
  * Main program : initializations and infinite loop
  */
 void main(void) {
-    char text[21];
-    
+
     TRISD = 0x00;
-    TRISE = 0xFF;
+
+    TRISE = 0xFF;   // PORTE (menu buttons) -> input
     TRISF = 0xFF;
     CMCON = 0x07;
-    
-    // AD converter initialization:
-    ADCON0 = 0X01;  // AN0, ADC ON
-    ADCON1 = 0x0B;  // AN3-0 -> analogic
-    ADCON2 = 0x09;  // Left justification, 2 Tad, 8 Tosc
-    
+
+    // AD converter
+    ADCON0 = 0X01;      // AN0, ADC ON
+    ADCON1 = 0x0B;      // AN3-0 -> analogic
+    ADCON2 = 0x09;      // Left justification, 2 Tad, 8 Tosc
+
     TRISGbits.TRISG0 = 0;
     TRISGbits.TRISG4 = 0;
     PORTGbits.RG0 = 0;
     PORTGbits.RG4 = 0;
-    
-    // Compare mode: trigger special event
-    CCP2CON = 0x0B;
 
-    // Timer3 OFF
-    T3CON = 0x00;
+    // CCP2 interruption
+    CCP2CON = 0x0B;     // Compare mode: trigger special event
+    T3CON   = 0x00;     // Timer3 OFF
+    T1CON   = 0x01;     // Timer1 prescale 1:8
+    CCPR2H  = 0x04;     // 1250us -> 8kHz
+    CCPR2L  = 0xE2;
+    TMR1H   = 0;        // Timer1 -> 0
+    TMR1L   = 0;
 
-    // Timer1 prescale 1:1
-    T1CON = 0x01;
+    // initialize the default parameters values
+    prev_mode = MODE_NONE;              // previous mode selected: none
+    sampling = (unsigned) (10000000 / ((CCPR2H << 8) + CCPR2L));
+    filter = F_MOV_AVG;                 // filter selected: moving average
+    mov_avg_value = F_MOV_AVG_MIN;      // moving average value: minimum
+    low_cutoff = F_LOW_PASS_MIN;        // low-pass cutoff: minimum
+    high_cutoff = sampling;             // high-pass cutoff: maximum
+    echo_delay = F_ECHO_MIN;            // echo delay: minimum
+    echoes = F_ECHO_MIN2;               // number of echoes: minimum
 
-    // 500us -> 20kHz
-    CCPR2H = 0x01;
-    CCPR2L = 0xF4;
-
-    // Timer1 -> 0
-    TMR1H = 0;
-    TMR1L = 0;
-
-    init_LM044L();
-    
     // LCD initialization
     init_LM044L();
-    send_text_LCD("SIGNAL PROCESSING", 1);
-    sprintf(text, "Sampling freq%2.0fkHz", 20.0);
-    send_text_LCD(text, 2);
+    display_parameters();
 
     // Interruption on CCP2 (high priority)
-    RCONbits.IPEN = 1;
+    RCONbits.IPEN   = 1;
     IPR2bits.CCP2IP = 1;
     PIR2bits.CCP2IF = 0;
     PIE2bits.CCP2IE = 1;
@@ -168,17 +247,206 @@ void main(void) {
     INTCONbits.GIEH = 1;
     
     while (1) {
-        if (!PORTEbits.RE0) {
-            INTCONbits.GIEH = 0;
-            sprintf(text, "Max %3u", Xmax);
-            send_text_LCD(text, 3);
-            sprintf(text, "Min %3u", Xmin);
-            send_text_LCD(text, 4);
+        if (SW_RUN) {
+            if (prev_mode != MODE_RUN) {            // run mode initialization:
+                prev_mode = MODE_RUN;               // set the previous mode to RUN
+                send_text_LCD(" ", menu_entry, 19); // erase the menu selector
+                INTCONbits.GIEH = 1;                // activate the interruption
+            }
         } else {
-            INTCONbits.GIEH = 1;
+            if (prev_mode != MODE_CONFIG) {         // config mode initialization: 
+                INTCONbits.GIEH = 0;                // deactivate the interruption
+                prev_mode = MODE_CONFIG;            // set the previous mode to CONFIG
+                menu_entry = M_FILTER;              // select the first menu
+                send_text_LCD("<", menu_entry, 19); // display the menu selector
+            }
+
+            if (!PB_PREV_MENU) {                    // previous menu selection:
+                while (!PB_PREV_MENU);              // wait the button release
+                send_text_LCD(" ", menu_entry, 19); // erase the menu selector
+                if (!menu_entry) menu_entry = filter == F_ECHO ? M_ECHO_COUNT-1 : M_COUNT-1;
+                else menu_entry--;                  // select the previous menu
+                send_text_LCD("<", menu_entry, 19); // display the menu selector
+            }
+            
+            if (!PB_NEXT_MENU) {                    // next menu selection:
+                while (!PB_NEXT_MENU);              // wait the button release
+                send_text_LCD(" ", menu_entry, 19); // erase the menu selector
+                if (filter == F_ECHO && menu_entry == M_ECHO_COUNT-1) menu_entry = 0;
+                else if (filter != F_ECHO && menu_entry == M_COUNT-1) menu_entry = 0;
+                else menu_entry++;                  // select the next menu
+                send_text_LCD("<", menu_entry, 19); // display the menu selector
+            }
+            
+            if (!PB_VALUE_DN) {                     // value down selection:
+                while (!PB_VALUE_DN);               // wait the button release
+                switch (menu_entry) {
+                case M_FILTER:                      // select the previous filter type
+                    if (!filter) filter = F_COUNT-1;
+                    else filter--;
+                    display_parameters();           // display the related parameters
+                    break;
+                case M_SAMPLING:                    // decrease the sampling frequency
+                    if (sampling == SAMPLING_MAX) {
+                        CCPR2H = (unsigned char) (CCPR2H << 1);
+                        CCPR2L = (unsigned char) (CCPR2L << 1);
+                        update_sampling_frequency(sampling >> 1);
+                        if (low_cutoff > sampling) update_low_cutoff(sampling);
+                        if (high_cutoff > sampling) update_high_cutoff(sampling);
+                    }
+                    break;
+                case M_VALUE:                       // decrease the filter first value, either
+                    switch (filter) {
+                    case F_MOV_AVG:                 // the moving average value
+                        if (mov_avg_value > F_MOV_AVG_MIN) update_mov_avg_value(mov_avg_value-1);
+                        break;
+                    case F_LOW_PASS:                // the low-pass filter cutoff frequency
+                        if (low_cutoff > F_LOW_PASS_MIN) update_low_cutoff(low_cutoff-F_HL_PASS_STEP);
+                        break;
+                    case F_HIGH_PASS:               // the high-pass filter cutoff frequency
+                        if (high_cutoff > F_HIGH_PASS_MIN) update_high_cutoff(high_cutoff-F_HL_PASS_STEP);
+                        break;
+                    case F_ECHO:                    // the delay of the echo filter
+                        if (echo_delay > F_ECHO_MIN) update_echo_delay(echo_delay-F_ECHO_STEP);
+                        break;
+                    default:
+                        break;
+                    }
+                    break;
+                case M_VALUE2:                      // decrease the filter second value (the number of echoes)
+                    if (echoes > F_ECHO_MIN2) update_echoes(echoes-1);
+                    break;
+                default:
+                    break;
+                }
+            }
+
+            if (!PB_VALUE_UP) {                     // value up selection
+                while (!PB_VALUE_UP);               // wait the button release
+                switch (menu_entry) {
+                case M_FILTER:
+                    if (filter == F_COUNT-1) filter = 0;
+                    else filter++;
+                    display_parameters();
+                    break;
+                case M_SAMPLING:
+                    if (sampling == SAMPLING_MIN) {
+                        CCPR2H = CCPR2H >> 1;
+                        CCPR2L = CCPR2L >> 1;
+                        update_sampling_frequency(sampling << 1);
+                    }
+                    break;
+                case M_VALUE:                       // increase the filter first value, either
+                    switch (filter) {
+                    case F_MOV_AVG:                 // the moving average value
+                        if (mov_avg_value < F_MOV_AVG_MAX) update_mov_avg_value(mov_avg_value+1);
+                        break;
+                    case F_LOW_PASS:                // the low-pass filter cutoff frequency
+                        if (low_cutoff < sampling) update_low_cutoff(low_cutoff+F_HL_PASS_STEP);
+                        break;
+                    case F_HIGH_PASS:               // the high-pass filter cutoff frequency
+                        if (high_cutoff < sampling) update_high_cutoff(high_cutoff+F_HL_PASS_STEP);
+                        break;
+                    case F_ECHO:                    // the delay of the echo filter
+                        if (echo_delay < F_ECHO_MAX) update_echo_delay(echo_delay+F_ECHO_STEP);
+                        break;
+                    default:
+                        break;
+                    }
+                    break;
+                case M_VALUE2:                      // increase the filter second value (the number of echoes)
+                    if (echoes < F_ECHO_MAX2) update_echoes(echoes+1);
+                    break;
+                default:
+                    break;
+                }
+            }
         }
         __delay_ms(100);
     }
     
     return;
+}
+
+void display_parameters() {
+    char text[19];
+    switch (filter) {
+    case F_MOV_AVG:
+        send_text_LCD("Moving avg filter ", 0, 0);
+        sprintf(text, "Sampling %6d Hz", sampling);
+        send_text_LCD(text, 1, 0);
+        sprintf(text, "Value %12d", 1 << mov_avg_value);
+        send_text_LCD(text, 2, 0);
+        send_text_LCD("                  ", 3, 0);
+        break;
+    case F_LOW_PASS:
+        send_text_LCD("Low-pass filter   ", 0, 0);
+        sprintf(text, "Sampling %6d Hz", sampling);
+        send_text_LCD(text, 1, 0);
+        sprintf(text, "Cutoff %8u Hz", low_cutoff);
+        send_text_LCD(text, 2, 0);
+        send_text_LCD("                  ", 3, 0);
+        break;
+    case F_HIGH_PASS:
+        send_text_LCD("High-pass filter  ", 0, 0);
+        sprintf(text, "Sampling %6d Hz", sampling);
+        send_text_LCD(text, 1, 0);
+        sprintf(text, "Cutoff %8u Hz", high_cutoff);
+        send_text_LCD(text, 2, 0);
+        send_text_LCD("                  ", 3, 0);
+        break;
+    case F_ECHO:
+        send_text_LCD("Echo filter       ", 0, 0);
+        sprintf(text, "Sampling %6d Hz", sampling);
+        send_text_LCD(text, 1, 0);
+        sprintf(text, "Delay %9u ms", echo_delay);
+        send_text_LCD(text, 2, 0);
+        sprintf(text, "Echoes %11d", echoes);
+        send_text_LCD(text, 3, 0);
+        break;
+    default:
+        break;
+    }
+}
+
+void update_sampling_frequency(unsigned new_val) {
+    char text[19];
+    sampling = new_val;
+    sprintf(text, "%6d", sampling);
+    send_text_LCD(text, 1, 9);
+}
+
+void update_mov_avg_value(char new_val) {
+    char text[19];
+    mov_avg_value = new_val;
+    sprintf(text, "%12d", 1 << mov_avg_value);
+    send_text_LCD(text, 2, 6);
+}
+
+void update_low_cutoff(unsigned new_val) {
+    char text[19];
+    low_cutoff = new_val;
+    sprintf(text, "%8u", low_cutoff);
+    send_text_LCD(text, 2, 7);
+}
+
+void update_high_cutoff(unsigned new_val) {
+    char text[19];
+    high_cutoff = new_val;
+    sprintf(text, "%8u", high_cutoff);
+    send_text_LCD(text, 2, 7);
+}
+
+void update_echo_delay(unsigned new_val) {
+    char text[19];
+    echo_delay = new_val;
+    sprintf(text, "%9u", echo_delay);
+    send_text_LCD(text, 2, 6);
+}
+
+void update_echoes(char new_val) {
+    char text[19];
+    echoes = new_val;
+    sprintf(text, "%11d", echoes);
+    send_text_LCD(text, 3, 7);
 }

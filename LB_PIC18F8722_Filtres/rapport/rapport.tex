@@ -91,6 +91,20 @@
     \end{figure}
 
 
+    Moyennes glissantes : implémenter des pas en puissance de 2 permet d'implementer une frequence d'echantillonnage plus elevee, i.e. 16k au lieu de 8 car la rotation de bits est plus rapide que 
+
+    Remarques sur le projet Proteus
+    pas de filtre anti aliasing car l'audio d'entrée est déjà échantillonné à la bonne fréquence (sinon on pourrait rajouter un filtre de laplace aussi en entrée). Mais ici, la simulation est déjà assez lente...
+
+    Attention pour les analyses de Fourier : bien setter la fréquence max à la fréquence utile du signal (-> Fe/2), changer aussi la fréquence de coupure du filtre
+
+
+    Cahier des charges : c'est mieux de
+    - mettre au point un menu circulaire
+    - connecter le MCP que le DAC (attention aux conflits avec de LCD)
+
+    Dans le travail : mettre en avant les réglages du filtre et les effets sur le signal. Attention, plus le filtre est filtrant, plus le signal de sortie est déphasé.
+
     \section{Organigramme/Analyse}
     % L’organigramme de haut niveau du programme
 

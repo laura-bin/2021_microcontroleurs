@@ -90,24 +90,24 @@ void send_char_LCD(char ch) {
     __delay_us(4);
 }
 
-void send_text_LCD(char *text, int line) {
+void send_text_LCD(char *text, char line, char col) {
     switch (line) {
+        case 0:
+            send_command_LCD(LCD_LINE1 + col);
+            break;
         case 1:
-            send_command_LCD(LCD_LINE1);
+            send_command_LCD(LCD_LINE2 + col);
             break;
         case 2:
-            send_command_LCD(LCD_LINE2);
+            send_command_LCD(LCD_LINE3 + col);
             break;
         case 3:
-            send_command_LCD(LCD_LINE3);
-            break;
-        case 4:
-            send_command_LCD(LCD_LINE4);
+            send_command_LCD(LCD_LINE4 + col);
             break;
         default:
             break;
     }
-    
+
     while(*text) {
         send_char_LCD(*text);
         text++;
