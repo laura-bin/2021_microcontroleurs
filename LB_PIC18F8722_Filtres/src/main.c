@@ -153,14 +153,19 @@
 #define F_HL_PASS_STEP  100
 #define F_ECHO_STEP     10
 
+#define BUF_SIZE        8       // signal buffer size
+
 /* Global variables (used by interruption & main program) */
-unsigned X0 = 0, Xmin = 255, Xmax = 0;
+unsigned char sig_in[BUF_SIZE];     // input buffer
+unsigned char sig_out[BUF_SIZE];    // output buffer
+int index;                          // buffer index
+unsigned temp_out;                  // temporary variable used to compute the output signal value
 
 char prev_mode;             // previous run/config mode value
 char menu_entry;            // current menu entry selected
 char filter;                // current filter selected
 unsigned sampling;          // sampling frequency (8000 or 16000 Hz)
-char mov_avg_value;         // moving average filter value (2, 4 or 8)
+char mov_avg_coef;          // moving average filter coefficient (1-3 -> 2, 4 or 8)
 unsigned low_cutoff;        // low-pass filter cutoff frequency
 unsigned high_cutoff;       // high-pass filter cutoff frequency
 unsigned echo_delay;        // echo filter delay
@@ -169,36 +174,44 @@ char echoes;                // echo filter number of echoes (1, 2 or 3)
 // update and display the parameters
 void display_parameters(void);
 void update_sampling_frequency(unsigned new_val);
-void update_mov_avg_value(char new_val);
+void update_mov_avg_coef(char new_val);
 void update_low_cutoff(unsigned new_val);
 void update_high_cutoff(unsigned new_val);
 void update_echo_delay(unsigned new_val);
 void update_echoes(char new_val);
 
+void init_signal() {
+    double frequency, omega;
+    int i;
+    index = 0;
+    for (i = 0; i < 1<<mov_avg_coef; i++) sig_in[i] = 0;
+}
+
 void __interrupt(high_priority) Int_Vect_High(void) {
+    unsigned char i;
+
     TICK = 1;
 
     // analog to digital conversion, result in X0
     ADCON0bits.NOT_DONE = 1;
     while (ADCON0bits.NOT_DONE);
-    X0 = ADRESH;
-    
-    if (X0 < Xmin) Xmin = X0;
-    if (X0 > Xmax) Xmax = X0;
-    
-    if (PORTEbits.RE0) DAC0808 = (unsigned char) X0;
+    sig_in[index] = ADRESH;
+    index++;
+    if (index == 1<<mov_avg_coef) index = 0;
+
+    temp_out = 0;
+    for (i = 0; i < 1<<mov_avg_coef; i++) temp_out += sig_in[i];
+
+    DAC0808 = (unsigned char) (temp_out >> mov_avg_coef);
 
     TICK = 0;
-    
     PIR2bits.CCP2IF = 0;
 }
-
 
 /**
  * Main program : initializations and infinite loop
  */
 void main(void) {
-
     TRISD = 0x00;
 
     TRISE = 0xFF;   // PORTE (menu buttons) -> input
@@ -208,7 +221,7 @@ void main(void) {
     // AD converter
     ADCON0 = 0X01;      // AN0, ADC ON
     ADCON1 = 0x0B;      // AN3-0 -> analogic
-    ADCON2 = 0x09;      // Left justification, 2 Tad, 8 Tosc
+    ADCON2 = 0x01;      // Left justification, 0 Tad, 8 Tosc
 
     TRISGbits.TRISG0 = 0;
     TRISGbits.TRISG4 = 0;
@@ -224,11 +237,11 @@ void main(void) {
     TMR1H   = 0;        // Timer1 -> 0
     TMR1L   = 0;
 
-    // initialize the default parameters values
+    // initialize the menu default parameters values
     prev_mode = MODE_NONE;              // previous mode selected: none
     sampling = (unsigned) (10000000 / ((CCPR2H << 8) + CCPR2L));
     filter = F_MOV_AVG;                 // filter selected: moving average
-    mov_avg_value = F_MOV_AVG_MIN;      // moving average value: minimum
+    mov_avg_coef = F_MOV_AVG_MIN;       // moving average value: minimum
     low_cutoff = F_LOW_PASS_MIN;        // low-pass cutoff: minimum
     high_cutoff = sampling;             // high-pass cutoff: maximum
     echo_delay = F_ECHO_MIN;            // echo delay: minimum
@@ -251,11 +264,13 @@ void main(void) {
             if (prev_mode != MODE_RUN) {            // run mode initialization:
                 prev_mode = MODE_RUN;               // set the previous mode to RUN
                 send_text_LCD(" ", menu_entry, 19); // erase the menu selector
+                init_signal();
                 INTCONbits.GIEH = 1;                // activate the interruption
             }
         } else {
             if (prev_mode != MODE_CONFIG) {         // config mode initialization: 
                 INTCONbits.GIEH = 0;                // deactivate the interruption
+                send_text_LCD("          ", 3, 0);
                 prev_mode = MODE_CONFIG;            // set the previous mode to CONFIG
                 menu_entry = M_FILTER;              // select the first menu
                 send_text_LCD("<", menu_entry, 19); // display the menu selector
@@ -298,7 +313,7 @@ void main(void) {
                 case M_VALUE:                       // decrease the filter first value, either
                     switch (filter) {
                     case F_MOV_AVG:                 // the moving average value
-                        if (mov_avg_value > F_MOV_AVG_MIN) update_mov_avg_value(mov_avg_value-1);
+                        if (mov_avg_coef > F_MOV_AVG_MIN) update_mov_avg_coef(mov_avg_coef-1);
                         break;
                     case F_LOW_PASS:                // the low-pass filter cutoff frequency
                         if (low_cutoff > F_LOW_PASS_MIN) update_low_cutoff(low_cutoff-F_HL_PASS_STEP);
@@ -339,7 +354,7 @@ void main(void) {
                 case M_VALUE:                       // increase the filter first value, either
                     switch (filter) {
                     case F_MOV_AVG:                 // the moving average value
-                        if (mov_avg_value < F_MOV_AVG_MAX) update_mov_avg_value(mov_avg_value+1);
+                        if (mov_avg_coef < F_MOV_AVG_MAX) update_mov_avg_coef(mov_avg_coef+1);
                         break;
                     case F_LOW_PASS:                // the low-pass filter cutoff frequency
                         if (low_cutoff < sampling) update_low_cutoff(low_cutoff+F_HL_PASS_STEP);
@@ -364,8 +379,6 @@ void main(void) {
         }
         __delay_ms(100);
     }
-    
-    return;
 }
 
 void display_parameters() {
@@ -375,7 +388,7 @@ void display_parameters() {
         send_text_LCD("Moving avg filter ", 0, 0);
         sprintf(text, "Sampling %6d Hz", sampling);
         send_text_LCD(text, 1, 0);
-        sprintf(text, "Value %12d", 1 << mov_avg_value);
+        sprintf(text, "Coefficient %6d", 1 << mov_avg_coef);
         send_text_LCD(text, 2, 0);
         send_text_LCD("                  ", 3, 0);
         break;
@@ -416,11 +429,11 @@ void update_sampling_frequency(unsigned new_val) {
     send_text_LCD(text, 1, 9);
 }
 
-void update_mov_avg_value(char new_val) {
+void update_mov_avg_coef(char new_val) {
     char text[19];
-    mov_avg_value = new_val;
-    sprintf(text, "%12d", 1 << mov_avg_value);
-    send_text_LCD(text, 2, 6);
+    mov_avg_coef = new_val;
+    sprintf(text, "%6d", 1 << mov_avg_coef);
+    send_text_LCD(text, 2, 12);
 }
 
 void update_low_cutoff(unsigned new_val) {
