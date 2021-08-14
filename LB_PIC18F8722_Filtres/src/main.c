@@ -162,7 +162,6 @@ int index;                          // buffer index
 unsigned temp_out;                  // temporary variable used to compute the output signal value
 
 char prev_mode;             // previous run/config mode value
-char menu_entry;            // current menu entry selected
 char filter;                // current filter selected
 unsigned sampling;          // sampling frequency (8000 or 16000 Hz)
 char mov_avg_coef;          // moving average filter coefficient (1-3 -> 2, 4 or 8)
@@ -212,6 +211,7 @@ void __interrupt(high_priority) Int_Vect_High(void) {
  * Main program : initializations and infinite loop
  */
 void main(void) {
+    char menu_entry;        // current menu entry selected
     unsigned cutoff_max;    // high/low pass filter max cutoff value determined by the sampling frequency
 
     TRISD = 0x00;
@@ -260,7 +260,7 @@ void main(void) {
     PIE2bits.CCP2IE = 1;
     INTCONbits.GIEL = 0;
     INTCONbits.GIEH = 1;
-    
+
     while (1) {
         if (SW_RUN) {
             if (prev_mode != MODE_RUN) {            // run mode initialization:
@@ -291,7 +291,7 @@ void main(void) {
                 else if (filter != F_ECHO && menu_entry == M_COUNT-1) menu_entry = 0;
                 else menu_entry++;                  // select the next menu
                 send_text_LCD("<", menu_entry, 19); // display the menu selector
-                
+
             } else if (!PB_VALUE_DN) {              // value down selection:
                 while (!PB_VALUE_DN);               // wait the button release
                 switch (menu_entry) {
@@ -308,7 +308,6 @@ void main(void) {
                         cutoff_max = sampling >> 1;
                         if (low_cutoff > cutoff_max) update_low_cutoff(cutoff_max);
                         if (high_cutoff > cutoff_max) update_high_cutoff(cutoff_max);
-
                     }
                     break;
                 case M_VALUE:                       // decrease the filter first value, either
