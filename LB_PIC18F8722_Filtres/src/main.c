@@ -246,7 +246,7 @@ void main(void) {
     echoes = F_ECHO_MIN2;               // number of echoes: minimum
 
     // LCD initialization
-    init_LM044L();
+    init_SPI();
     display_parameters();
 
     // Interruption on CCP2 (high priority)

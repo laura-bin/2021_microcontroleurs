@@ -49,16 +49,11 @@
 #define CURSOR_BLINK    0x0F
 
 /**
- * Initializes the SPI bus
- */
-void init_SPI(void);
-
-/**
  * Initializes the SPI bus, 
  * then the MCP23S17 I/0 expander via the SPI bus,
  * then the LM044L LCD via the MCP23S17 I/0 expander
  */
-void init_LM044L(void);
+void init_SPI(void);
 
 /**
  * Sends a command to the LM044L alphanumeric LCD

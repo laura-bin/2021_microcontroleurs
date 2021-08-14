@@ -40,7 +40,7 @@ void send(char address, char data) {
 
 /* HEADER IMPLEMENTATION */
 
-void init_LM044L(void) {
+void init_SPI(void) {
     // SPI bus initialization
     SPI_SCK_TRIS = 0;
     SPI_SDI_TRIS = 1;
