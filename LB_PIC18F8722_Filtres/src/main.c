@@ -141,10 +141,11 @@
 #define F_MOV_AVG_MAX   3       // moving average filter max value (2^3)
 #define F_LOW_PASS_MIN  0       // low-pass filter min value
 #define F_HIGH_PASS_MIN 0       // high-pass filter min value
-#define F_ECHO_MIN      50      // echo filter min delay value
-#define F_ECHO_MAX      500     // echo filter max delay value
-#define F_ECHO_MIN2     1       // echo filter min number of echoes
-#define F_ECHO_MAX2     3       // echo filter max number of echoes
+#define F_ECHO_DEL_MIN  50      // echo filter min delay value
+#define F_ECHO_DEL_MAX  500     // echo filter max delay value
+#define F_ECHO_N_MIN    1       // echo filter min number of echoes
+#define F_ECHO_N_MAX    3       // echo filter max number of echoes
+
 #define SAMPLING_MIN    8000    // sampling frequency min value
 #define SAMPLING_MAX    16000   // sampling frequency max value
 
@@ -242,8 +243,8 @@ void main(void) {
     mov_avg_coef = F_MOV_AVG_MIN;       // moving average value: minimum
     low_cutoff = F_LOW_PASS_MIN;        // low-pass cutoff: minimum
     high_cutoff = sampling;             // high-pass cutoff: maximum
-    echo_delay = F_ECHO_MIN;            // echo delay: minimum
-    echoes = F_ECHO_MIN2;               // number of echoes: minimum
+    echo_delay = F_ECHO_DEL_MIN;        // echo delay: minimum
+    echoes = F_ECHO_N_MIN;              // number of echoes: minimum
 
     // LCD initialization
     init_SPI();
@@ -317,14 +318,14 @@ void main(void) {
                         if (high_cutoff > F_HIGH_PASS_MIN) update_high_cutoff(high_cutoff-F_HL_PASS_STEP);
                         break;
                     case F_ECHO:                    // the delay of the echo filter
-                        if (echo_delay > F_ECHO_MIN) update_echo_delay(echo_delay-F_ECHO_STEP);
+                        if (echo_delay > F_ECHO_DEL_MIN) update_echo_delay(echo_delay-F_ECHO_STEP);
                         break;
                     default:
                         break;
                     }
                     break;
                 case M_VALUE2:                      // decrease the filter second value (the number of echoes)
-                    if (echoes > F_ECHO_MIN2) update_echoes(echoes-1);
+                    if (echoes > F_ECHO_N_MIN) update_echoes(echoes-1);
                     break;
                 default:
                     break;
@@ -357,14 +358,14 @@ void main(void) {
                         if (high_cutoff < sampling) update_high_cutoff(high_cutoff+F_HL_PASS_STEP);
                         break;
                     case F_ECHO:                    // the delay of the echo filter
-                        if (echo_delay < F_ECHO_MAX) update_echo_delay(echo_delay+F_ECHO_STEP);
+                        if (echo_delay < F_ECHO_DEL_MAX) update_echo_delay(echo_delay+F_ECHO_STEP);
                         break;
                     default:
                         break;
                     }
                     break;
                 case M_VALUE2:                      // increase the filter second value (the number of echoes)
-                    if (echoes < F_ECHO_MAX2) update_echoes(echoes+1);
+                    if (echoes < F_ECHO_N_MAX) update_echoes(echoes+1);
                     break;
                 default:
                     break;
