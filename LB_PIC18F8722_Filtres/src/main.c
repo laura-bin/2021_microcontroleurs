@@ -154,10 +154,11 @@
 #define F_ECHO_STEP     10
 
 #define BUF_SIZE        8       // signal buffer size
+#define SCALE           7
 
 /* Global variables (used by interruption & main program) */
-unsigned char sig_in[BUF_SIZE];     // input buffer
-unsigned char sig_out[BUF_SIZE];    // output buffer
+char sig_in[BUF_SIZE];     // input buffer
+char sig_out[BUF_SIZE];    // output buffer
 int index;                          // buffer index
 unsigned temp_out;                  // temporary variable used to compute the output signal value
 
@@ -170,6 +171,9 @@ unsigned high_cutoff;       // high-pass filter cutoff frequency
 unsigned echo_delay;        // echo filter delay
 char echoes;                // echo filter number of echoes (1, 2 or 3)
 
+signed char coef_a, coef_b;   // low and high pass filters coefficients
+
+
 // update and display the parameters
 void display_parameters(void);
 void update_sampling_frequency(unsigned new_val);
@@ -180,11 +184,28 @@ void update_echo_delay(unsigned new_val);
 void update_echoes(char new_val);
 
 void init_signal() {
-    double frequency, omega;
     int i;
+    double k, omega;
     index = 0;
-    for (i = 0; i < 1<<mov_avg_coef; i++) sig_in[i] = 0;
+    char text[20];
+
+    if (filter == F_LOW_PASS || filter == F_HIGH_PASS) {
+        if (filter == F_LOW_PASS) k = (double)low_cutoff / (double)sampling;
+        if (filter == F_HIGH_PASS) k = (double)high_cutoff / (double)sampling;
+        omega = 2.0 * M_PI * k;
+        
+        coef_a = (signed char) round(omega / (2.0 + omega) * pow(2.0, SCALE));
+        coef_b = (signed char) round((2.0 - omega) / (2.0 + omega) * pow(2.0, SCALE));
+        sprintf(text, "%d", coef_b);
+        send_text_LCD(text, 3, 0);
     }
+    
+    
+    // initialize the input and output signal buffers to 0
+    for (i = 0; i < BUF_SIZE; i++) sig_in[i] = 0;
+    for (i = 0; i < BUF_SIZE; i++) sig_in[i] = 0;
+
+}
 
 void __interrupt(high_priority) Int_Vect_High(void) {
     unsigned char i;
@@ -194,7 +215,7 @@ void __interrupt(high_priority) Int_Vect_High(void) {
     // analog to digital conversion, result in X0
     ADCON0bits.NOT_DONE = 1;
     while (ADCON0bits.NOT_DONE);
-    sig_in[index] = ADRESH;
+    sig_in[index] = ADRESH - 128;
         index++;
         if (index == 1<<mov_avg_coef) index = 0;
 
@@ -202,8 +223,8 @@ void __interrupt(high_priority) Int_Vect_High(void) {
         for (i = 0; i < 1<<mov_avg_coef; i++) temp_out += sig_in[i];
 
         DAC0808 = (unsigned char) (temp_out >> mov_avg_coef);
-
-    TICK = 0;
+ 
+   TICK = 0;
     PIR2bits.CCP2IF = 0;
 }
 
