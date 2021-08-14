@@ -103,7 +103,6 @@
 #include <math.h>
 #include <stdio.h>
 
-#include "config.h"
 #include "LM044L_MCP23S17_SPI.h"
 
 #define DAC0808 PORTD                // output signal on the DAC0808
@@ -185,7 +184,7 @@ void init_signal() {
     int i;
     index = 0;
     for (i = 0; i < 1<<mov_avg_coef; i++) sig_in[i] = 0;
-}
+    }
 
 void __interrupt(high_priority) Int_Vect_High(void) {
     unsigned char i;
@@ -196,13 +195,13 @@ void __interrupt(high_priority) Int_Vect_High(void) {
     ADCON0bits.NOT_DONE = 1;
     while (ADCON0bits.NOT_DONE);
     sig_in[index] = ADRESH;
-    index++;
-    if (index == 1<<mov_avg_coef) index = 0;
+        index++;
+        if (index == 1<<mov_avg_coef) index = 0;
 
-    temp_out = 0;
-    for (i = 0; i < 1<<mov_avg_coef; i++) temp_out += sig_in[i];
+        temp_out = 0;
+        for (i = 0; i < 1<<mov_avg_coef; i++) temp_out += sig_in[i];
 
-    DAC0808 = (unsigned char) (temp_out >> mov_avg_coef);
+        DAC0808 = (unsigned char) (temp_out >> mov_avg_coef);
 
     TICK = 0;
     PIR2bits.CCP2IF = 0;
@@ -226,7 +225,6 @@ void main(void) {
     TRISGbits.TRISG0 = 0;
     TRISGbits.TRISG4 = 0;
     PORTGbits.RG0 = 0;
-    PORTGbits.RG4 = 0;
 
     // CCP2 interruption
     CCP2CON = 0x0B;     // Compare mode: trigger special event
@@ -239,7 +237,7 @@ void main(void) {
 
     // initialize the menu default parameters values
     prev_mode = MODE_NONE;              // previous mode selected: none
-    sampling = (unsigned) (10000000 / ((CCPR2H << 8) + CCPR2L));
+    sampling = (unsigned) (10000000 / ((CCPR2H << 8) + CCPR2L));    // sampling frequency determined by the CCP2 value
     filter = F_MOV_AVG;                 // filter selected: moving average
     mov_avg_coef = F_MOV_AVG_MIN;       // moving average value: minimum
     low_cutoff = F_LOW_PASS_MIN;        // low-pass cutoff: minimum
@@ -270,7 +268,6 @@ void main(void) {
         } else {
             if (prev_mode != MODE_CONFIG) {         // config mode initialization: 
                 INTCONbits.GIEH = 0;                // deactivate the interruption
-                send_text_LCD("          ", 3, 0);
                 prev_mode = MODE_CONFIG;            // set the previous mode to CONFIG
                 menu_entry = M_FILTER;              // select the first menu
                 send_text_LCD("<", menu_entry, 19); // display the menu selector
@@ -282,18 +279,16 @@ void main(void) {
                 if (!menu_entry) menu_entry = filter == F_ECHO ? M_ECHO_COUNT-1 : M_COUNT-1;
                 else menu_entry--;                  // select the previous menu
                 send_text_LCD("<", menu_entry, 19); // display the menu selector
-            }
-            
-            if (!PB_NEXT_MENU) {                    // next menu selection:
+
+            } else if (!PB_NEXT_MENU) {             // next menu selection:
                 while (!PB_NEXT_MENU);              // wait the button release
                 send_text_LCD(" ", menu_entry, 19); // erase the menu selector
                 if (filter == F_ECHO && menu_entry == M_ECHO_COUNT-1) menu_entry = 0;
                 else if (filter != F_ECHO && menu_entry == M_COUNT-1) menu_entry = 0;
                 else menu_entry++;                  // select the next menu
                 send_text_LCD("<", menu_entry, 19); // display the menu selector
-            }
-            
-            if (!PB_VALUE_DN) {                     // value down selection:
+                
+            } else if (!PB_VALUE_DN) {              // value down selection:
                 while (!PB_VALUE_DN);               // wait the button release
                 switch (menu_entry) {
                 case M_FILTER:                      // select the previous filter type
@@ -334,17 +329,16 @@ void main(void) {
                 default:
                     break;
                 }
-            }
 
-            if (!PB_VALUE_UP) {                     // value up selection
+            } else if (!PB_VALUE_UP) {                     // value up selection
                 while (!PB_VALUE_UP);               // wait the button release
                 switch (menu_entry) {
-                case M_FILTER:
+                case M_FILTER:                      // select the next filter type
                     if (filter == F_COUNT-1) filter = 0;
                     else filter++;
-                    display_parameters();
+                    display_parameters();           // display the related parameters
                     break;
-                case M_SAMPLING:
+                case M_SAMPLING:                    // increase the sampling frequency
                     if (sampling == SAMPLING_MIN) {
                         CCPR2H = CCPR2H >> 1;
                         CCPR2L = CCPR2L >> 1;
@@ -432,34 +426,44 @@ void update_sampling_frequency(unsigned new_val) {
 void update_mov_avg_coef(char new_val) {
     char text[19];
     mov_avg_coef = new_val;
-    sprintf(text, "%6d", 1 << mov_avg_coef);
-    send_text_LCD(text, 2, 12);
+    if (filter == F_MOV_AVG) {
+        sprintf(text, "%6d", 1 << mov_avg_coef);
+        send_text_LCD(text, 2, 12);
+    }
 }
 
 void update_low_cutoff(unsigned new_val) {
     char text[19];
     low_cutoff = new_val;
-    sprintf(text, "%8u", low_cutoff);
-    send_text_LCD(text, 2, 7);
+    if (filter == F_LOW_PASS) {
+        sprintf(text, "%8u", low_cutoff);
+        send_text_LCD(text, 2, 7);
+    }
 }
 
 void update_high_cutoff(unsigned new_val) {
     char text[19];
     high_cutoff = new_val;
-    sprintf(text, "%8u", high_cutoff);
-    send_text_LCD(text, 2, 7);
+    if (filter == F_HIGH_PASS) {
+        sprintf(text, "%8u", high_cutoff);
+        send_text_LCD(text, 2, 7);
+    }
 }
 
 void update_echo_delay(unsigned new_val) {
     char text[19];
     echo_delay = new_val;
-    sprintf(text, "%9u", echo_delay);
-    send_text_LCD(text, 2, 6);
+    if (filter == F_ECHO) {
+        sprintf(text, "%9u", echo_delay);
+        send_text_LCD(text, 2, 6);
+    }
 }
 
 void update_echoes(char new_val) {
     char text[19];
     echoes = new_val;
-    sprintf(text, "%11d", echoes);
-    send_text_LCD(text, 3, 7);
+    if (filter == F_ECHO) {
+        sprintf(text, "%11d", echoes);
+        send_text_LCD(text, 3, 7);
+    }
 }
