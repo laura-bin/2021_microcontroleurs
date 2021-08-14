@@ -82,7 +82,7 @@
     \end{tabular}
 
     \paragraph{}
-    Le menu décrit ci-dessous est exemplatif, pour éviter de perdre trop de temps avec Proteus, vous pouvez limiter la complexité de l’interface de l’interface homme-machine.
+    Le menu décrit ci-dessous est exemplatif, pour éviter de perdre trop de temps avec Proteus, vous pouvez limiter la complexité de l’interface homme-machine.
 
 
     \begin{figure}[H]
@@ -120,7 +120,7 @@
     \begin{itemize}
         \item le type de filtre est affiché sur la première ligne;
         \item la fréquence d'échantillonnage est affichée sur la deuxième ligne;
-        \item les paramètres du filtre sont affiché sur la troisième et, uniquement dans le cas du filtre echo, sur la quatrième ligne.
+        \item les paramètres du filtre sont affichés sur la troisième et, uniquement dans le cas du filtre echo, sur la quatrième ligne.
     \end{itemize}
 
     \begin{figure}[H]
@@ -196,7 +196,7 @@
     La modification du type de filtre \textbf{[31]} se fait, comme la navigation, de manière circulaire : il tourne en boucle en appuyant sur le bouton \texttt{[+]} ou sur le bouton \texttt{[-]}, dans un sens de défilement ou dans l'autre. Lorsque le type de filtre est modifié, c'est tout l'affichage qui est mis à jour \textbf{[32]} car les paramètres configurables dépendent du type de filtre actif.
 
     \paragraph{}
-    La fréquence d'échantillonnage n'a que deux valeurs possibles : \SI{8}{\kilo\hertz} ou \SI{16}{\kilo\hertz}. Elle n'est donc diminuée que si elle est au maximum (de la même manière, elle ne sera augmentée que si elle est au minimum). La valeur de comparaison de l'interruption est doublée \textbf{[41]} et la valeur de la fréquence d'échantillonage est divisée par deux \textbf{[42]} puis mise à jour sur le LCD \textbf{[43]}. La fréquence d'échantillonage détermine la fréquence de coupure maximale qui peut être utilisée par les filtres : elle peut valoir au maximum la moitié de la fréquence d'échantillonage \textbf{[44]} (théorème de Shannon). Si les fréquences de coupure des filtres passe-bas et passe-haut dépassent cette valeur maximale, elles prennent cette nouvelle valeur et, si filtre actif est un filtre passe-bas ou passe-haut, le LCD est mis à jour \textbf{[45]}.
+    La fréquence d'échantillonnage n'a que deux valeurs possibles : \SI{8}{\kilo\hertz} ou \SI{16}{\kilo\hertz}. Elle n'est donc diminuée que si elle est au maximum (de la même manière, elle ne sera augmentée que si elle est au minimum). La valeur de comparaison de l'interruption est doublée \textbf{[41]} et la valeur de la fréquence d'échantillonnage est divisée par deux \textbf{[42]} puis mise à jour sur le LCD \textbf{[43]}. La fréquence d'échantillonnage détermine la fréquence de coupure maximale qui peut être utilisée par les filtres : ce maximum est fixé à la moitié de la fréquence d'échantillonnage \textbf{[44]} (théorème de Shannon). Si les fréquences de coupure des filtres passe-bas et passe-haut dépassent cette valeur maximale, elles prennent cette nouvelle valeur et, si filtre actif est un filtre passe-bas ou passe-haut, le LCD est mis à jour \textbf{[45]}.
 
     \paragraph{}
     La diminution de la première valeur met à jour \textbf{[51]}, en fonction du filtre actif, soit : le coefficient du filtre par moyenne glissante; la fréquence de coupure du filtre passe-bas; la fréquence de coupure du filtre passe-haut; le délai du filtre echo.
@@ -205,7 +205,7 @@
     La deuxième valeur \textbf{[61]} ne concerne que le filtre echo et met à jour le nombre d'echos.
 
     \paragraph{}
-    Ces valeurs ne peuvent être diminuées que si elles sont strictement supérieures aux valeures minimales définies par des variables du préprocesseur. Elles sont diminuées d'un pas également défini par des variables du préprocesseur. Le même mécanisme est implémenté pour l'augmentation des valeurs.
+    Ces valeurs ne peuvent être diminuées que si elles sont strictement supérieures aux valeurs minimales définies par des variables du préprocesseur. Elles sont diminuées d'un pas également défini par des variables du préprocesseur. Le même mécanisme est implémenté pour l'augmentation des valeurs.
 
     \subsection{Mode de traitement du signal}
     \begin{figure}[H]
