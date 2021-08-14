@@ -212,6 +212,8 @@ void __interrupt(high_priority) Int_Vect_High(void) {
  * Main program : initializations and infinite loop
  */
 void main(void) {
+    unsigned cutoff_max;    // high/low pass filter max cutoff value determined by the sampling frequency
+
     TRISD = 0x00;
 
     TRISE = 0xFF;   // PORTE (menu buttons) -> input
@@ -239,10 +241,11 @@ void main(void) {
     // initialize the menu default parameters values
     prev_mode = MODE_NONE;              // previous mode selected: none
     sampling = (unsigned) (10000000 / ((CCPR2H << 8) + CCPR2L));    // sampling frequency determined by the CCP2 value
+    cutoff_max = sampling >> 1;         // low/high pass filter max value determined by the sampling frequency
     filter = F_MOV_AVG;                 // filter selected: moving average
     mov_avg_coef = F_MOV_AVG_MIN;       // moving average value: minimum
-    low_cutoff = F_LOW_PASS_MIN;        // low-pass cutoff: minimum
-    high_cutoff = sampling;             // high-pass cutoff: maximum
+    low_cutoff = F_LOW_PASS_MIN;        // low-pass cutoff value: minimum
+    high_cutoff = cutoff_max;           // high-pass cutoff value: maximum
     echo_delay = F_ECHO_DEL_MIN;        // echo delay: minimum
     echoes = F_ECHO_N_MIN;              // number of echoes: minimum
 
@@ -302,8 +305,10 @@ void main(void) {
                         CCPR2H = (unsigned char) (CCPR2H << 1);
                         CCPR2L = (unsigned char) (CCPR2L << 1);
                         update_sampling_frequency(sampling >> 1);
-                        if (low_cutoff > sampling) update_low_cutoff(sampling);
-                        if (high_cutoff > sampling) update_high_cutoff(sampling);
+                        cutoff_max = sampling >> 1;
+                        if (low_cutoff > cutoff_max) update_low_cutoff(cutoff_max);
+                        if (high_cutoff > cutoff_max) update_high_cutoff(cutoff_max);
+
                     }
                     break;
                 case M_VALUE:                       // decrease the filter first value, either
@@ -344,6 +349,7 @@ void main(void) {
                         CCPR2H = CCPR2H >> 1;
                         CCPR2L = CCPR2L >> 1;
                         update_sampling_frequency(sampling << 1);
+                        cutoff_max = sampling >> 1;
                     }
                     break;
                 case M_VALUE:                       // increase the filter first value, either
@@ -352,10 +358,10 @@ void main(void) {
                         if (mov_avg_coef < F_MOV_AVG_MAX) update_mov_avg_coef(mov_avg_coef+1);
                         break;
                     case F_LOW_PASS:                // the low-pass filter cutoff frequency
-                        if (low_cutoff < sampling) update_low_cutoff(low_cutoff+F_HL_PASS_STEP);
+                        if (low_cutoff < cutoff_max) update_low_cutoff(low_cutoff+F_HL_PASS_STEP);
                         break;
                     case F_HIGH_PASS:               // the high-pass filter cutoff frequency
-                        if (high_cutoff < sampling) update_high_cutoff(high_cutoff+F_HL_PASS_STEP);
+                        if (high_cutoff < cutoff_max) update_high_cutoff(high_cutoff+F_HL_PASS_STEP);
                         break;
                     case F_ECHO:                    // the delay of the echo filter
                         if (echo_delay < F_ECHO_DEL_MAX) update_echo_delay(echo_delay+F_ECHO_STEP);
