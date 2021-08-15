@@ -232,6 +232,12 @@ void __interrupt(high_priority) Int_Vect_High(void) {
         DAC0808 = (unsigned char) (temp >> mov_avg_coef) + 128;
         break;
     case F_LOW_PASS:
+        // Y(n) = coef_a * (Xn + Xn-1) + coef_b * Yn-1
+        temp = coef_a * (sig_in[0] + sig_in[1]) + coef_b * sig_out[0];
+        temp = temp >> SCALE;
+        sig_in[1] = sig_in[0];
+        sig_out[0] = (signed char) temp;
+        DAC0808 = (unsigned char) (temp + 128);
         break;
     case F_HIGH_PASS:
         break;
