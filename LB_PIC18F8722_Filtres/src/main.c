@@ -157,10 +157,9 @@
 #define SCALE           7
 
 /* Global variables (used by interruption & main program) */
-char sig_in[BUF_SIZE];     // input buffer
-char sig_out[BUF_SIZE];    // output buffer
+signed char sig_in[BUF_SIZE];     // input buffer
+signed char sig_out[BUF_SIZE];    // output buffer
 int index;                          // buffer index
-unsigned temp_out;                  // temporary variable used to compute the output signal value
 
 char prev_mode;             // previous run/config mode value
 char filter;                // current filter selected
@@ -172,6 +171,9 @@ unsigned echo_delay;        // echo filter delay
 char echoes;                // echo filter number of echoes (1, 2 or 3)
 
 signed char coef_a, coef_b;   // low and high pass filters coefficients
+
+long min, max;
+
 
 
 // update and display the parameters
@@ -188,6 +190,10 @@ void init_filter() {
     double k, omega;
     index = 0;
     char text[20];
+    
+    min = 10000;
+    max = -10000;
+
 
     if (filter == F_LOW_PASS || filter == F_HIGH_PASS) {
         if (filter == F_LOW_PASS) k = (double)low_cutoff / (double)sampling;
@@ -196,8 +202,6 @@ void init_filter() {
         
         coef_a = (signed char) round(omega / (2.0 + omega) * pow(2.0, SCALE));
         coef_b = (signed char) round((2.0 - omega) / (2.0 + omega) * pow(2.0, SCALE));
-        sprintf(text, "%d", coef_b);
-        send_text_LCD(text, 3, 0);
     }
     
     
@@ -209,22 +213,35 @@ void init_filter() {
 
 void __interrupt(high_priority) Int_Vect_High(void) {
     unsigned char i;
+    long temp;          // temporary variable used to compute the output signal value
 
     TICK = 1;
 
     // analog to digital conversion, result in X0
     ADCON0bits.NOT_DONE = 1;
     while (ADCON0bits.NOT_DONE);
-    sig_in[index] = ADRESH - 128;
+    sig_in[index] = (signed char)(ADRESH - 128);
+
+    switch (filter) {
+    case F_MOV_AVG:
         index++;
         if (index == 1<<mov_avg_coef) index = 0;
 
-        temp_out = 0;
-        for (i = 0; i < 1<<mov_avg_coef; i++) temp_out += sig_in[i];
-
-        DAC0808 = (unsigned char) (temp_out >> mov_avg_coef);
+        temp = 0;
+        for (i = 0; i < 1<<mov_avg_coef; i++) temp += sig_in[i];
+        DAC0808 = (unsigned char) (temp >> mov_avg_coef) + 128;
+        break;
+    case F_LOW_PASS:
+        break;
+    case F_HIGH_PASS:
+        break;
+    case F_ECHO:
+        break;
+    default:
+        break;
+    }
  
-   TICK = 0;
+    TICK = 0;
     PIR2bits.CCP2IF = 0;
 }
 
