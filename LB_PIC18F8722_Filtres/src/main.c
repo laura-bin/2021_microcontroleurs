@@ -183,7 +183,7 @@ void update_high_cutoff(unsigned new_val);
 void update_echo_delay(unsigned new_val);
 void update_echoes(char new_val);
 
-void init_signal() {
+void init_filter() {
     int i;
     double k, omega;
     index = 0;
@@ -287,7 +287,7 @@ void main(void) {
             if (prev_mode != MODE_RUN) {            // run mode initialization:
                 prev_mode = MODE_RUN;               // set the previous mode to RUN
                 send_text_LCD(" ", menu_entry, 19); // erase the menu selector
-                init_signal();
+                init_filter();
                 INTCONbits.GIEH = 1;                // activate the interruption
             }
         } else {
