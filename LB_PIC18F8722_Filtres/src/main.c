@@ -187,24 +187,25 @@ void update_echoes(char new_val);
 
 void init_filter() {
     int i;
-    double k, omega;
+    double omega;
     index = 0;
     char text[20];
     
     min = 10000;
     max = -10000;
 
-
-    if (filter == F_LOW_PASS || filter == F_HIGH_PASS) {
-        if (filter == F_LOW_PASS) k = (double)low_cutoff / (double)sampling;
-        if (filter == F_HIGH_PASS) k = (double)high_cutoff / (double)sampling;
-        omega = 2.0 * M_PI * k;
-        
+    if (filter == F_LOW_PASS) {
+        omega = 2.0 * M_PI * (double)low_cutoff / (double)sampling;
         coef_a = (signed char) round(omega / (2.0 + omega) * pow(2.0, SCALE));
         coef_b = (signed char) round((2.0 - omega) / (2.0 + omega) * pow(2.0, SCALE));
     }
-    
-    
+
+    if (filter == F_HIGH_PASS) {
+        omega = 2.0 * M_PI * (double)high_cutoff / (double)sampling;
+        coef_a = (signed char) round(2.0 / (2.0 + omega) * pow(2.0, SCALE));
+        coef_b = (signed char) round((2.0 - omega) / (2.0 + omega) * pow(2.0, SCALE));
+    }
+
     // initialize the input and output signal buffers to 0
     for (i = 0; i < BUF_SIZE; i++) sig_in[i] = 0;
     for (i = 0; i < BUF_SIZE; i++) sig_in[i] = 0;
@@ -214,6 +215,7 @@ void init_filter() {
 void __interrupt(high_priority) Int_Vect_High(void) {
     unsigned char i;
     long temp;          // temporary variable used to compute the output signal value
+    char text[20];
 
     TICK = 1;
 
@@ -240,6 +242,12 @@ void __interrupt(high_priority) Int_Vect_High(void) {
         DAC0808 = (unsigned char) (temp + 128);
         break;
     case F_HIGH_PASS:
+        // Y(n) = coef_a * (Xn - Xn-1) + coef_b * Yn-1
+        temp = coef_a * (sig_in[0] - sig_in[1]) + coef_b * sig_out[0];
+        temp = temp >> SCALE;
+        sig_in[1] = sig_in[0];
+        sig_out[0] = (signed char) temp;
+        DAC0808 = (unsigned char) (temp + 128);
         break;
     case F_ECHO:
         break;
@@ -286,10 +294,10 @@ void main(void) {
     prev_mode = MODE_NONE;              // previous mode selected: none
     sampling = (unsigned) (10000000 / ((CCPR2H << 8) + CCPR2L));    // sampling frequency determined by the CCP2 value
     cutoff_max = sampling >> 1;         // low/high pass filter max value determined by the sampling frequency
-    filter = F_MOV_AVG;                 // filter selected: moving average
+    filter = F_HIGH_PASS;                 // filter selected: moving average
     mov_avg_coef = F_MOV_AVG_MIN;       // moving average value: minimum
     low_cutoff = F_LOW_PASS_MIN;        // low-pass cutoff value: minimum
-    high_cutoff = cutoff_max;           // high-pass cutoff value: maximum
+    high_cutoff = 2000;           // high-pass cutoff value: maximum
     echo_delay = F_ECHO_DEL_MIN;        // echo delay: minimum
     echoes = F_ECHO_N_MIN;              // number of echoes: minimum
 
