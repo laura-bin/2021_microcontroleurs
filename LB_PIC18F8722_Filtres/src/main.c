@@ -141,8 +141,8 @@
 #define F_MOV_AVG_MAX   3       // moving average filter max value (2^3)
 #define F_LOW_PASS_MIN  0       // low-pass filter min value
 #define F_HIGH_PASS_MIN 0       // high-pass filter min value
-#define F_ECHO_DEL_MIN  320     // echo filter min delay value (50 or 100 ms)
-#define F_ECHO_DEL_MAX  320     // echo filter max delay value (50 or 100 ms)
+#define F_ECHO_DEL_MIN  10      // echo filter min delay value (50 or 100 ms)
+#define F_ECHO_DEL_MAX  3200    // echo filter max delay value (50 or 100 ms)
 #define F_ECHO_N_MIN    1       // echo filter min number of echoes
 #define F_ECHO_N_MAX    3       // echo filter max number of echoes
 
@@ -151,30 +151,25 @@
 
 // steps
 #define F_HL_PASS_STEP  100
-#define F_ECHO_STEP     10
+#define F_ECHO_STEP     400
 
-#define INPUT_BUF_SIZE  3200       // input signal buffer size and max echo delay value
 #define OUTPUT_BUF_SIZE 1       // input signal buffer size
 #define COEF_SCALE           7
 
-/* Global variables (used by interruption & main program) */
-signed char sig_in[INPUT_BUF_SIZE];     // input buffer
-signed char sig_out[OUTPUT_BUF_SIZE];    // output buffer
-int index;                          // buffer index
+/* Global variables (used by the interruption & the main program) */
+signed char sig_in[F_ECHO_DEL_MAX+1];   // input signal buffer
+signed char sig_out[OUTPUT_BUF_SIZE];   // output signal buffer
+int index[F_ECHO_N_MAX+1];              // input buffer indexes
+int coef[F_ECHO_N_MAX+1];               // coefficients used to compute the output signal
 
-char prev_mode;             // previous run/config mode value
 char filter;                // current filter selected
 int sampling;          // sampling frequency (8 or 16 kHz)
 char mov_avg_coef;          // moving average filter coefficient (1-3 -> 2, 4 or 8)
 int low_cutoff;        // low-pass filter cutoff frequency
 int high_cutoff;       // high-pass filter cutoff frequency
 int echo_delay;        // echo filter delay
-char echoes;                // echo filter number of echoes (1, 2 or 3)
-
-int coef_a, coef_b;   // low and high pass filters coefficients
-
-long min, max;
-
+int echoes;            // echo filter number of echoes (1, 2 or 3)
+int i;
 
 
 // update and display the parameters
@@ -184,78 +179,53 @@ void update_mov_avg_coef(char new_val);
 void update_low_cutoff(int new_val);
 void update_high_cutoff(int new_val);
 void update_echo_delay(int new_val);
-void update_echoes(char new_val);
-
-void init_filter() {
-    int i;
-    double omega;
-    index = 0;
-    
-    min = 10000;
-    max = -10000;
-
-    if (filter == F_LOW_PASS) {
-        omega = 2.0 * M_PI * (double)low_cutoff / (double)sampling / 1000.0;
-        coef_a = (signed char) round(omega / (2.0 + omega) * pow(2.0, COEF_SCALE));
-        coef_b = (signed char) round((2.0 - omega) / (2.0 + omega) * pow(2.0, COEF_SCALE));
-    }
-
-    if (filter == F_HIGH_PASS) {
-        omega = 2.0 * M_PI * (double)high_cutoff / (double)sampling / 1000.0;
-        coef_a = (signed char) round(2.0 / (2.0 + omega) * pow(2.0, COEF_SCALE));
-        coef_b = (signed char) round((2.0 - omega) / (2.0 + omega) * pow(2.0, COEF_SCALE));
-    }
-
-    // initialize the input and output signal buffers to 0
-    for (i = 0; i < INPUT_BUF_SIZE; i++) sig_in[i] = 0;
-    for (i = 0; i < OUTPUT_BUF_SIZE; i++) sig_out[i] = 0;
-
-}
+void update_echoes(int new_val);
 
 void __interrupt(high_priority) Int_Vect_High(void) {
-    unsigned char i;
-    long temp;          // temporary variable used to compute the output signal value
+    long output;        // temporary variable used to compute the output signal value
 
-    TICK = 1;
+    TICK = 1;                       // debug tick ON
 
-    // analog to digital conversion, result in X0
-    ADCON0bits.NOT_DONE = 1;
+    ADCON0bits.NOT_DONE = 1;        // analog to digital conversion, result in the input buffer
     while (ADCON0bits.NOT_DONE);
-    sig_in[index] = (signed char)(ADRESH - 128);
+    sig_in[index[0]] = (signed char)(ADRESH - 128);
 
+    output = 0;
     switch (filter) {
-    case F_MOV_AVG:
-        index++;
-        if (index == 1<<mov_avg_coef) index = 0;
-
-        temp = 0;
-        for (i = 0; i < 1<<mov_avg_coef; i++) temp += sig_in[i];
-        DAC0808 = (unsigned char) (temp >> mov_avg_coef) + 128;
+    case F_MOV_AVG:                 // moving average filter: Yt = SUM(i=0:coef-1) Xt-i / coef
+        for (i = 0; i < 1<<mov_avg_coef; i++) output += sig_in[i];
+        output = output >> mov_avg_coef;
+        index[0]++;                     // increment the input buffer index
+        if (index[0] == 1<<mov_avg_coef) index[0] = 0;
         break;
-    case F_LOW_PASS:
-        // Y(n) = coef_a * (Xn + Xn-1) + coef_b * Yn-1
-        temp = coef_a * (sig_in[0] + sig_in[1]) + coef_b * sig_out[0];
-        temp = temp >> COEF_SCALE;
-        sig_in[1] = sig_in[0];
-        sig_out[0] = (signed char) temp;
-        DAC0808 = (unsigned char) (temp + 128);
+    case F_LOW_PASS:                    // low-pass filter: Yt = A * (Xt + Xt-1) + B * Yt-1
+        output = coef[0]*(sig_in[0] + sig_in[1]) + coef[1]*sig_out[0];
+        output = output >> COEF_SCALE;
+        sig_in[1] = sig_in[0];             // shift the input signal value in the buffer
+        sig_out[0] = (signed char) output; // store the output value in the buffer
         break;
-    case F_HIGH_PASS:
-        // Y(n) = coef_a * (Xn - Xn-1) + coef_b * Yn-1
-        temp = coef_a * (sig_in[0] - sig_in[1]) + coef_b * sig_out[0];
-        temp = temp >> COEF_SCALE;
-        sig_in[1] = sig_in[0];
-        sig_out[0] = (signed char) temp;
-        DAC0808 = (unsigned char) (temp + 128);
+    case F_HIGH_PASS:                   // low-pass filter: Yt = A * (Xt - Xt-1) + B * Yt-1
+        output = coef[0]*(sig_in[0] - sig_in[1]) + coef[1]*sig_out[0];
+        output = output >> COEF_SCALE;
+        sig_in[1] = sig_in[0];             // shift the input signal value in the buffer
+        sig_out[0] = (signed char) output; // store the output value in the buffer
         break;
-    case F_ECHO:
+    case F_ECHO:                   // echo filter: Yt = A Xt + B Xt-delay + ...
+        for (i = 0; i <= echoes; i++) output += coef[i] * sig_in[index[i]];
+        output = output >> COEF_SCALE;
+        for (i = 0; i <= echoes; i++) {     // increment the input buffer indexes
+            index[i]++;
+            if (index[i] == F_ECHO_DEL_MAX+1) index[i] = 0;
+        }
         break;
     default:
         break;
     }
+
+    DAC0808 = (unsigned char) (output + 128); // send the output signal value to the DAC
  
-    TICK = 0;
-    PIR2bits.CCP2IF = 0;
+    TICK = 0;               // debug tick OFF
+    PIR2bits.CCP2IF = 0;    // interruption flag cleared
 }
 
 /**
@@ -263,7 +233,9 @@ void __interrupt(high_priority) Int_Vect_High(void) {
  */
 void main(void) {
     char menu_entry;        // current menu entry selected
+    char prev_mode;         // previous mode selected: run, config or none
     int cutoff_max;         // high/low pass filter max cutoff value determined by the sampling frequency
+    double omega;           // angular frequency used to initialize some filters coefficients
 
     TRISD = 0x00;
 
@@ -289,15 +261,15 @@ void main(void) {
     TMR1H   = 0;        // Timer1 -> 0
     TMR1L   = 0;
 
-    // initialize the menu default parameters values
+    // initialize the default parameters values
     prev_mode = MODE_NONE;              // previous mode selected: none
     sampling = (int) (10000 / ((CCPR2H << 8) + CCPR2L));     // sampling frequency determined by the CCP2 value
     cutoff_max = sampling*1000 >> 1;    // low/high pass filter max value determined by the sampling frequency
-    filter = F_MOV_AVG;                 // filter selected: moving average
+    filter = F_ECHO;                 // filter selected: moving average
     mov_avg_coef = F_MOV_AVG_MIN;       // moving average value: minimum
     low_cutoff = F_LOW_PASS_MIN;        // low-pass cutoff value: minimum
     high_cutoff = cutoff_max;           // high-pass cutoff value: maximum
-    echo_delay = F_ECHO_DEL_MIN;        // echo delay: minimum
+    echo_delay = F_ECHO_DEL_MAX;        // echo delay: minimum
     echoes = F_ECHO_N_MIN;              // number of echoes: minimum
 
     // LCD initialization
@@ -305,19 +277,61 @@ void main(void) {
     display_parameters();
 
     // Interruption on CCP2 (high priority)
-    RCONbits.IPEN   = 1;
+    RCONbits.IPEN   = 1;    // activation des interruption prioritisées
     IPR2bits.CCP2IP = 1;
     PIR2bits.CCP2IF = 0;
     PIE2bits.CCP2IE = 1;
     INTCONbits.GIEL = 0;
-    INTCONbits.GIEH = 1;
+    INTCONbits.GIEH = 0;
 
     while (1) {
         if (SW_RUN) {
             if (prev_mode != MODE_RUN) {            // run mode initialization:
                 prev_mode = MODE_RUN;               // set the previous mode to RUN
                 send_text_LCD(" ", menu_entry, 19); // erase the menu selector
-                init_filter();
+
+                index[0] = 0;                       // input buffer index to 0
+                for (i = 0; i < F_ECHO_DEL_MAX+1; i++) sig_in[i] = 0;   // input buffer to 0
+                for (i = 0; i < OUTPUT_BUF_SIZE; i++) sig_out[i] = 0;   // output buffer to 0
+
+                switch (filter) {                   // depending on the filter selected:
+                    send_text_LCD("SW", 3, 0); // erase the menu selector
+                case F_LOW_PASS:                    // compute the low-pass filter coefficients
+                    send_text_LCD("LP", 3, 0); // erase the menu selector
+                    omega = 2.0 * M_PI * (double)low_cutoff / (double)sampling / 1000.0;
+                    coef[0] = (signed char) round(omega / (2.0 + omega) * pow(2.0, COEF_SCALE));
+                    coef[1] = (signed char) round((2.0 - omega) / (2.0 + omega) * pow(2.0, COEF_SCALE));
+                    break;
+                case F_HIGH_PASS:                   // or compute the low-pass filter coefficients
+                    omega = 2.0 * M_PI * (double)high_cutoff / (double)sampling / 1000.0;
+                    coef[0] = (signed char) round(2.0 / (2.0 + omega) * pow(2.0, COEF_SCALE));
+                    coef[1] = (signed char) round((2.0 - omega) / (2.0 + omega) * pow(2.0, COEF_SCALE));
+                    break;
+                case F_ECHO:                        // or initialize the echoes indexes
+                    for (i = 0; i < echoes; i++) index[echoes-i] = F_ECHO_DEL_MAX+1 - echo_delay/(i+1);
+                    switch (echoes) {               // and the echoes coefficients (total must be 128, 2^COEF_SCALE)
+                    case 1:
+                        coef[0] = 96;   // original signal
+                        coef[1] = 32;   // echo
+                        break;
+                    case 2:
+                        coef[0] = 88;   // original signal
+                        coef[1] = 32;   // first echo
+                        coef[2] = 8;    // second echo
+                        break;
+                    case 3:
+                        coef[0] = 72;   // original signal
+                        coef[1] = 32;   // first echo
+                        coef[2] = 16;   // second echo
+                        coef[3] = 8;    // third echo
+                        break;
+                    default:
+                        break;
+                    }
+                    break;
+                default:                            // other filters does not need a specific initialization
+                    break;
+                }
                 INTCONbits.GIEH = 1;                // activate the interruption
             }
         } else {
@@ -357,6 +371,7 @@ void main(void) {
                         CCPR2L = (unsigned char) (CCPR2L << 1);
                         update_sampling_frequency(sampling >> 1);
                         cutoff_max = sampling*1000 >> 1;
+                        update_echo_delay(echo_delay);
                         if (low_cutoff > cutoff_max) update_low_cutoff(cutoff_max);
                         if (high_cutoff > cutoff_max) update_high_cutoff(cutoff_max);
                     }
@@ -373,7 +388,7 @@ void main(void) {
                         if (high_cutoff > F_HIGH_PASS_MIN) update_high_cutoff(high_cutoff-F_HL_PASS_STEP);
                         break;
                     case F_ECHO:                    // the delay of the echo filter
-                        if (echo_delay > INPUT_BUF_SIZE) update_echo_delay(echo_delay-F_ECHO_STEP);
+                        if (echo_delay > F_ECHO_DEL_MIN) update_echo_delay(echo_delay-F_ECHO_STEP);
                         break;
                     default:
                         break;
@@ -400,6 +415,7 @@ void main(void) {
                         CCPR2L = CCPR2L >> 1;
                         update_sampling_frequency(sampling << 1);
                         cutoff_max = sampling*1000 >> 1;
+                        update_echo_delay(echo_delay);
                     }
                     break;
                 case M_VALUE:                       // increase the filter first value, either
@@ -511,12 +527,12 @@ void update_echo_delay(int new_val) {
     char text[19];
     echo_delay = new_val;
     if (filter == F_ECHO) {
-        sprintf(text, "%9d", echo_delay * 1000 / sampling);
+        sprintf(text, "%9d", echo_delay / sampling);
         send_text_LCD(text, 2, 6);
     }
 }
 
-void update_echoes(char new_val) {
+void update_echoes(int new_val) {
     char text[19];
     echoes = new_val;
     if (filter == F_ECHO) {

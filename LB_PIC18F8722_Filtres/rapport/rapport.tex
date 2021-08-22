@@ -218,7 +218,7 @@
     Comme le mode de configuration, le mode de traitement du signal n'est initialisé que lors du passage du mode \texttt{CONFIG} au mode \texttt{RUN} \textbf{[2]} : le sélecteur de menus \texttt{<} est masqué et le signal est initialisé en fonction du type de filtre actif et de ses paramètres.
 
     \paragraph{}
-    Une interruption survient toutes les \SI{1250}{\micro\second} (fréquence d'échantillonnage à \SI{8}{\kilo\hertz}) ou toutes les \SI{625}{\micro\second} (fréquence d'échantillonnage à \SI{16}{\kilo\hertz}). Elle déclenche la conversion analogique-numérique (ADC) \textbf{[100]}. Quand elle est terminée, son résultat est lu dans le tampon d'entrée \textbf{[101]}. Le signal est alors traité selon le type de filtre et ses paramètres \textbf{[102]} et la résultat du traitement est placé dans le tampon de sortie pour pouvoir être transmis au convertisseur numérique analogique (DAC) \textbf{[103]}.
+    Une interruption survient toutes les \SI{125}{\micro\second} (fréquence d'échantillonnage à \SI{8}{\kilo\hertz}) ou toutes les \SI{62,5}{\micro\second} (fréquence d'échantillonnage à \SI{16}{\kilo\hertz}). Elle déclenche la conversion analogique-numérique (ADC) \textbf{[100]}. Quand elle est terminée, son résultat est lu dans le tampon d'entrée \textbf{[101]}. Le signal est alors traité selon le type de filtre et ses paramètres \textbf{[102]} et la résultat du traitement est placé dans le tampon de sortie pour pouvoir être transmis au convertisseur numérique analogique (DAC) \textbf{[103]}.
 
 
 
@@ -235,6 +235,8 @@
     % La description et la justification des fréquences utilisées
     % Fréquence d'échantillonnage, fréquence utile du signal et fréquence de coupure du filtre de Laplace (entre max Fs/2 et min la fréquence du signal: à la moitié de la fréquence d'échantillonnage, c'est ok pour toutes les fréquences de signaux mais pour mieux lisser, on peut jouer avec la fréquence de coupure du filtre pour la rapprocher de la fréquence du signal, d'autant plus qu'ici on a un filtre de Laplace, d'ordre 1, i.e. un simple RC qui a donc une faible sélectivité, i.e. la coupure n'est pas nette)
     % Remarque : le filtre de Laplace déphase le signal de sortie d'autant plus qu'il est plus filtrant.
+
+    Dans l'analyse de Fourier, on voit apparaître le bruit de quantification (on est en 8 bits -> c'est inévitable) : dans les hautes fréquences il y a très peu de puissance pour l'entrée mais il y en a plus pour la sortie : c'est la puissance du bruit de quantification
 
     \section{Configuration du PIC}
     \label{section:configuration}
@@ -287,8 +289,16 @@
     Filtre à réponse impulsionnelle finie (FIR: finite impulse response) dont le coefficient $a = \frac{1}{N}$ et $b = 0$
 
 
+    \paragraph{Filtre echo}
+    Paramètre pour configurer le poids de l'echo par rapport au signal : le poids du signal est à 6 et l'echo p.e. à 2 -> rapport 3/4 - 1/4
+    Paramètre nr back ici à 300 -> je recule de 3000 échantillons => à une fréquence de 10kHz, si je recule de 3000 échantillons, on a un echo à 3/10ème de seconde
+
+    Attention à la taille du vecteur : c'est beaucoup plus simple de gérer le vecteur en C qu'en assembleur (cf projet précédent) mais il faut quand même regarder la taille de la mémoire dans la datasheet pour ne pas dépasser. Le prof a mis un max de 3600 car on a une mémoire de 4k. Le seul moyen d'allonger les temps d'echos est de jouer sur la fréquence d'échantillonnage
+
+
     \section{Tests}
     % La description des tests à effectuer pour valider le programme
+    Le menu tel que conçu est utile pour le test en temps réel mais pas pour les analyses : il faut changer les paramètre de départ du menu, recompiler et lancer les différentes simulations
 
     \section{Difficultés rencontrées}
     % Le calcul des mises à échelle pour s'assurer qu'il n'y a pas de dépassement de valeurs.
@@ -360,6 +370,13 @@
     % -> 22/02 (fin)
 
     % 1/03 interruptions prioritisées
+    Possible amélioration mais complique beaucoup la programmation. En plus, en 16kHz, on est vraiment à la limite des possibilités du processeur -> beaucoup d'interruptions en haute priorité -> les entrées et sorties risquent d'être extrêmement lentes
+
+
+    A ajouter au grafcet : ledelay de l'echo est aussi mis à jour quand on met à jour la sampling frequency
+
+
+
 
 
 
