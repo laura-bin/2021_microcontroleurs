@@ -106,56 +106,56 @@
 #include "SPI.h"
 
 // PIC I/Os
-#define SW_RUN          PORTEbits.RE0   // RUN / CONFIG mode switch
-#define PB_PREV_MENU    PORTEbits.RE1   // previous menu entry selection push button (NC)
-#define PB_NEXT_MENU    PORTEbits.RE2   // next menu entry selection push button (NC)
-#define PB_VALUE_DN     PORTEbits.RE3   // value down push button (NC)
-#define PB_VALUE_UP     PORTEbits.RE4   // value up push button (NC)
-#define TICK            PORTGbits.RG0   // debug tick measuring the processing time of the interruption
+#define SW_RUN              PORTEbits.RE0   // RUN / CONFIG mode switch
+#define PB_PREV_MENU        PORTEbits.RE1   // previous menu entry selection push button (NC)
+#define PB_NEXT_MENU        PORTEbits.RE2   // next menu entry selection push button (NC)
+#define PB_VALUE_DN         PORTEbits.RE3   // value down push button (NC)
+#define PB_VALUE_UP         PORTEbits.RE4   // value up push button (NC)
+#define TICK                PORTGbits.RG0   // debug tick measuring the processing time of the interruption
 
 // Modes
-#define MODE_NONE       0       // no mode selected
-#define MODE_RUN        1       // signal processing mode
-#define MODE_CONFIG     2       // filter configuration mode
+#define MODE_NONE           0       // no mode selected
+#define MODE_RUN            1       // signal processing mode
+#define MODE_CONFIG         2       // filter configuration mode
 
 // Menu entries
-#define M_FILTER        0       // filter type selection
-#define M_SAMPLING      1       // sampling frequency selection
-#define M_VALUE         2       // filter value selection
-#define M_VALUE2        3       // filter second value selection (used by the echo filter)
-#define M_COUNT         3       // count of menu entries
-#define M_ECHO_COUNT    4       // count of menu entries for the echo filter
+#define M_FILTER            0       // filter type selection
+#define M_SAMPLING          1       // sampling frequency selection
+#define M_VALUE             2       // filter value selection
+#define M_VALUE2            3       // filter second value selection (used by the echo filter)
+#define M_COUNT             3       // count of menu entries
+#define M_ECHO_COUNT        4       // count of menu entries for the echo filter
 
 // Filters
-#define F_MOV_AVG       0       // moving average filter
-#define F_LOW_PASS      1       // low-pass filter
-#define F_HIGH_PASS     2       // high-pass filter
-#define F_ECHO          3       // echo filter
-#define F_COUNT         4       // count of filters
+#define F_MOV_AVG           0       // moving average filter
+#define F_LOW_PASS          1       // low-pass filter
+#define F_HIGH_PASS         2       // high-pass filter
+#define F_ECHO              3       // echo filter
+#define F_COUNT             4       // count of filters
 
 // Parameters limit values
-#define F_MOV_AVG_MIN   1       // moving average filter min value (2^1)
-#define F_MOV_AVG_MAX   3       // moving average filter max value (2^3)
-#define F_LOW_PASS_MIN  0       // low-pass filter min value
-#define F_HIGH_PASS_MIN 0       // high-pass filter min value
-#define F_ECHO_DEL_MIN  10      // echo filter min delay value (50 or 100 ms)
-#define F_ECHO_DEL_MAX  3200    // echo filter max delay value (50 or 100 ms)
-#define F_ECHO_N_MIN    1       // echo filter min number of echoes
-#define F_ECHO_N_MAX    3       // echo filter max number of echoes
-#define SAMPLING_MIN    8       // sampling frequency min value in kHz
-#define SAMPLING_MAX    16      // sampling frequency max value in kHz
+#define F_MOV_AVG_MIN       1       // moving average filter min value (2^1)
+#define F_MOV_AVG_MAX       3       // moving average filter max value (2^3)
+#define F_LOW_PASS_MIN      0       // low-pass filter min value
+#define F_HIGH_PASS_MIN     0       // high-pass filter min value
+#define F_ECHO_DEL_MIN      10      // echo filter min delay value (50 or 100 ms)
+#define F_ECHO_DEL_MAX      3200    // echo filter max delay value (50 or 100 ms)
+#define F_ECHO_N_MIN        1       // echo filter min number of echoes
+#define F_ECHO_N_MAX        3       // echo filter max number of echoes
+#define SAMPLING_MIN        8       // sampling frequency min value in kHz
+#define SAMPLING_MAX        16      // sampling frequency max value in kHz
 
 // Parameters steps
-#define F_MOV_AVG_COEF_STEP 1   // moving average coefficient exponent step: 1
+#define F_MOV_AVG_COEF_STEP 1       // moving average coefficient exponent step: 1
 #define F_HL_PASS_STEP      100     // high and low-pass filter step: 100Hz
 #define F_ECHO_DEL_STEP     400     // echo delay step: 400 spaes in the buffer (50 or 25ms)
 
-#define COEF_SCALE      7       // filters coefficients scale: 2^7
+#define COEF_SCALE          7       // filters coefficients scale: 2^7
 
-#define SELECT_POS      19      // menu selector position
+#define SELECT_POS          19      // menu selector position
 
 #define IN_BUF_SIZE  F_ECHO_DEL_MAX+1   // input signal buffer size
-#define OUT_BUF_SIZE 1                  // output signal buffer size
+#define OUT_BUF_SIZE        1       // output signal buffer size
 
 // Global variables (used by the interruption & the main program)
 signed char sig_in[IN_BUF_SIZE];    // input signal buffer
