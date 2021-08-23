@@ -31,16 +31,20 @@
 #define SPI_LCD_CS_TRIS TRISCbits.TRISC6
 #define SPI_DAC_CS_TRIS TRISCbits.TRISC7
 
-/* LCD RS & EN connections on MCP23S17 PORT0 */
-#define LCD_RS          0x01
-#define LCD_E           0x02
-#define LCD_RS_E        0x03
+/* MCP4922 connections */
+#define LDAC            PORTGbits.RG4       // DAC load PIN
+#define LDAC_TRIS       TRISGbits.TRISG4
 
 /* MCP23S17 functions */
 #define MCP_IODIRA      0x00
 #define MCP_IODIRB      0x01
 #define MCP_GPIOA       0x12
 #define MCP_GPIOB       0x13
+
+/* LCD RS & EN connections on MCP23S17 PORT0 */
+#define LCD_RS          0x01
+#define LCD_E           0x02
+#define LCD_RS_E        0x03
 
 /* LCD functions */
 #define LCD_CLEAR       0x01
@@ -52,13 +56,10 @@
 #define CURSOR_ON       0x0E
 #define CURSOR_BLINK    0x0F
 
-/* MCP4922 connections */
-#define LDAC            PORTGbits.RG4       // DAC load PIN
-#define LDAC_TRIS       TRISGbits.TRISG4
-
 /**
  * Initializes the SPI bus, 
- * then the MCP23S17 I/0 expander via the SPI bus,
+ * then the MCP4922, 
+ * then the MCP23S17 I/0 expander via the SPI bus, 
  * then the LM044L LCD via the MCP23S17 I/0 expander
  */
 void init_SPI(void);
