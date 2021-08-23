@@ -10,7 +10,7 @@
 
 #include <xc.h>
 
-#include "LM044L_MCP23S17_SPI.h"
+#include "SPI.h"
 
 /* PRIVATE FUNCTION */
 
@@ -46,6 +46,7 @@ void init_SPI(void) {
     SPI_SDI_TRIS = 1;
     SPI_SDO_TRIS = 0;
     SPI_LCD_CS_TRIS = 0;
+    SPI_DAC_CS_TRIS = 0;
 
     SSP1STAT = 0x00;
     SSP1STATbits.CKE = 1;
@@ -53,6 +54,11 @@ void init_SPI(void) {
     SSP1CON1bits.SSPEN = 1;
 
     SPI_LCD_CS = 1;
+    SPI_DAC_CS = 1;
+    
+    // MCP4922 initialization
+    LDAC_TRIS = 0;
+    LDAC = 1;
 
     // MCP23S17 initialization
     send(MCP_IODIRA, 0x00);

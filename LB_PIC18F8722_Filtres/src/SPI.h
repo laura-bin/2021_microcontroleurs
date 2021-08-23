@@ -1,7 +1,9 @@
 #pragma once
 /** ***************************************************************************
- * LCD library for PIC18F8722
+ * SPI library for PIC18F8722
  * ==========================
+ *
+ * Initilizes the SPI bus connected to a LM044L and a CP4922
  *
  * Manages the communication with the alphanumeric LCD LM044L
  * via the MCP23S17 I/O expander and using the SPI bus
@@ -10,27 +12,29 @@
  ******************************************************************************/
 
 /* Crystal frequency */
-#define _XTAL_FREQ  40000000UL      // 10MHz HSPLL
+#define _XTAL_FREQ      40000000UL      // 10MHz HSPLL
 
 /* SSP interrupt flag */
-#define SSPIF       PIR1bits.SSP1IF
+#define SSPIF           PIR1bits.SSP1IF
 
 /* SPI connections */
-#define SPI_SCK	    PORTCbits.RC3   // clock
-#define SPI_SDI	    PORTCbits.RC4   // data in
-#define SPI_SDO	    PORTCbits.RC5   // data out
-#define SPI_LCD_CS  PORTCbits.RC6   // LCD chip select
+#define SPI_SCK         PORTCbits.RC3   // clock
+#define SPI_SDI         PORTCbits.RC4   // data in
+#define SPI_SDO         PORTCbits.RC5   // data out
+#define SPI_LCD_CS      PORTCbits.RC6   // LCD chip select
+#define SPI_DAC_CS      PORTCbits.RC7   // LCD chip select
 
 /* SPI TRIS registers used for initialization */
 #define SPI_SCK_TRIS    TRISCbits.TRISC3
 #define SPI_SDI_TRIS    TRISCbits.TRISC4
 #define SPI_SDO_TRIS    TRISCbits.TRISC5
 #define SPI_LCD_CS_TRIS TRISCbits.TRISC6
+#define SPI_DAC_CS_TRIS TRISCbits.TRISC7
 
 /* LCD RS & EN connections on MCP23S17 PORT0 */
-#define LCD_RS              0x01
-#define LCD_E               0x02
-#define LCD_RS_E            0x03
+#define LCD_RS          0x01
+#define LCD_E           0x02
+#define LCD_RS_E        0x03
 
 /* MCP23S17 functions */
 #define MCP_IODIRA      0x00
@@ -47,6 +51,10 @@
 #define CURSOR_OFF      0x0C
 #define CURSOR_ON       0x0E
 #define CURSOR_BLINK    0x0F
+
+/* MCP4922 connections */
+#define LDAC            PORTGbits.RG4       // DAC load PIN
+#define LDAC_TRIS       TRISGbits.TRISG4
 
 /**
  * Initializes the SPI bus, 

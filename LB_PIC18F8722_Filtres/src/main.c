@@ -103,9 +103,8 @@
 #include <math.h>
 #include <stdio.h>
 
-#include "LM044L_MCP23S17_SPI.h"
+#include "SPI.h"
 
-#define DAC0808 PORTD                // output signal on the DAC0808
 #define SIG_IN  PORTAbits.RA0        // input signal
 
 #define SW_RUN          PORTEbits.RE0   // RUN / CONFIG mode switch
@@ -222,8 +221,17 @@ void __interrupt(high_priority) Int_Vect_High(void) {
         break;
     }
 
-    DAC0808 = (unsigned char) (output + 128); // send the output signal value to the DAC
- 
+    SPI_DAC_CS = 0;         // send the output signal value to the DAC
+    SSPIF = 0;
+    SSPBUF = 0x10;          // MCP4922 mode x2
+    while (!SSPIF);
+    SSPIF = 0;
+    SSPBUF = (unsigned char) (output + 128);
+    while (!SSPIF);
+    SPI_DAC_CS = 1;
+    LDAC = 0;               // load the DAC
+    LDAC = 1;
+
     TICK = 0;               // debug tick OFF
     PIR2bits.CCP2IF = 0;    // interruption flag cleared
 }
@@ -249,7 +257,6 @@ void main(void) {
     ADCON2 = 0x01;      // Left justification, 0 Tad, 8 Tosc
 
     TRISGbits.TRISG0 = 0;
-    TRISGbits.TRISG4 = 0;
     PORTGbits.RG0 = 0;
 
     // CCP2 interruption
@@ -295,9 +302,7 @@ void main(void) {
                 for (i = 0; i < OUTPUT_BUF_SIZE; i++) sig_out[i] = 0;   // output buffer to 0
 
                 switch (filter) {                   // depending on the filter selected:
-                    send_text_LCD("SW", 3, 0); // erase the menu selector
                 case F_LOW_PASS:                    // compute the low-pass filter coefficients
-                    send_text_LCD("LP", 3, 0); // erase the menu selector
                     omega = 2.0 * M_PI * (double)low_cutoff / (double)sampling / 1000.0;
                     coef[0] = (signed char) round(omega / (2.0 + omega) * pow(2.0, COEF_SCALE));
                     coef[1] = (signed char) round((2.0 - omega) / (2.0 + omega) * pow(2.0, COEF_SCALE));
