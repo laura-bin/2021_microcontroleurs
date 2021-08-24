@@ -112,6 +112,7 @@
 #define PB_VALUE_DN         PORTEbits.RE3   // value down push button (NC)
 #define PB_VALUE_UP         PORTEbits.RE4   // value up push button (NC)
 #define TICK                PORTGbits.RG0   // debug tick measuring the processing time of the interruption
+#define DAC0808             PORTD           // DAC0808
 
 // Modes
 #define MODE_NONE           0       // no mode selected
@@ -231,6 +232,8 @@ void __interrupt(high_priority) Int_Vect_High(void) {
     SPI_DAC_CS = 1;
     LDAC = 0;               // load the DAC
     LDAC = 1;
+    
+    DAC0808 = (unsigned char) (output + 128);
 
     TICK = 0;               // debug tick OFF
     PIR2bits.CCP2IF = 0;    // interruption flag cleared
@@ -244,6 +247,9 @@ void main(void) {
     double omega;           // angular frequency used to initialize some filters coefficients
 
     // PIC configuration
+    TRISD = 0;
+    DAC0808 = 128;
+    
     TRISE   = 0xFF;         // PORTE (menu buttons) -> input
     TRISGbits.TRISG0 = 0;   // TICK -> output
     TICK    = 0;
