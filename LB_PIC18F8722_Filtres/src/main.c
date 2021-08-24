@@ -139,8 +139,8 @@
 #define F_MOV_AVG_MAX       3       // moving average filter max value (2^3)
 #define F_LOW_PASS_MIN      0       // low-pass filter min value
 #define F_HIGH_PASS_MIN     0       // high-pass filter min value
-#define F_ECHO_DEL_MIN      10      // echo filter min delay value (50 or 100 ms)
-#define F_ECHO_DEL_MAX      3200    // echo filter max delay value (50 or 100 ms)
+#define F_ECHO_DEL_MIN      800     // echo filter min delay value (100 or 50ms)
+#define F_ECHO_DEL_MAX      3200    // echo filter max delay value (400 or 200ms)
 #define F_ECHO_N_MIN        1       // echo filter min number of echoes
 #define F_ECHO_N_MAX        3       // echo filter max number of echoes
 #define SAMPLING_MIN        8       // sampling frequency min value in kHz
@@ -149,7 +149,7 @@
 // Parameters steps
 #define F_MOV_AVG_COEF_STEP 1       // moving average coefficient exponent step: 1
 #define F_HL_PASS_STEP      100     // high and low-pass filter step: 100Hz
-#define F_ECHO_DEL_STEP     400     // echo delay step: 400 spaes in the buffer (50 or 25ms)
+#define F_ECHO_DEL_STEP     400     // echo delay step: 400 spaces in the buffer (50 or 25ms)
 
 #define COEF_SCALE          7       // filters coefficients scale: 2^7
 
@@ -232,7 +232,7 @@ void __interrupt(high_priority) Int_Vect_High(void) {
     SPI_DAC_CS = 1;
     LDAC = 0;               // load the DAC
     LDAC = 1;
-    
+
     DAC0808 = (unsigned char) (output + 128);
 
     TICK = 0;               // debug tick OFF
@@ -247,12 +247,11 @@ void main(void) {
     double omega;           // angular frequency used to initialize some filters coefficients
 
     // PIC configuration
-    TRISD = 0;
-    DAC0808 = 128;
-    
     TRISE   = 0xFF;         // PORTE (menu buttons) -> input
     TRISGbits.TRISG0 = 0;   // TICK -> output
-    TICK    = 0;
+    TICK    = 0;            // TICK -> 0
+    TRISD   = 0;            // DAC0808 -> output
+    DAC0808 = 128;          // DAC0808 -> 0 + offset
     ADCON0  = 0X01;         // ADC enabled on AN0
     ADCON1  = 0x0E;         // AN0 -> analogic
     ADCON2  = 0x01;         // Left justification, 0 Tad, 8 Tosc
@@ -272,14 +271,50 @@ void main(void) {
 
     // Parameters initialization
     prev_mode       = MODE_NONE;            // previous mode selected: none
-    sampling        = (int) (10000 / ((CCPR2H << 8) + CCPR2L));     // sampling frequency determined by the CCP2 value
+    sampling        = (int) (10000 / ((CCPR2H << 8) + CCPR2L)); // sampling frequency determined by the CCP2 value
     cutoff_max      = sampling*1000 >> 1;   // low/high pass filter max value determined by the sampling frequency
-    filter          = F_ECHO;               // filter selected: moving average
+    filter          = F_MOV_AVG;            // filter selected: moving average
     mov_avg_coef    = F_MOV_AVG_MIN;        // moving average value: minimum
     low_cutoff      = F_LOW_PASS_MIN;       // low-pass cutoff value: minimum
     high_cutoff     = cutoff_max;           // high-pass cutoff value: maximum
-    echo_delay      = F_ECHO_DEL_MAX;       // echo delay: minimum
+    echo_delay      = F_ECHO_DEL_MIN;       // echo delay: minimum
     echoes          = F_ECHO_N_MIN;         // number of echoes: minimum
+
+
+
+    // Echo filter test: 1 echo, delay 200ms (16kHz)
+    filter          = F_ECHO;
+    CCPR2H          = CCPR2H >> 1;
+    CCPR2L          = CCPR2L >> 1;
+    sampling        = sampling << 1;
+    echo_delay      = F_ECHO_DEL_MAX;
+    echoes          = F_ECHO_N_MIN;
+
+    // Echo filter test: 1 echo, delay 400ms (8kHz)
+    // filter          = F_ECHO;
+    // echo_delay      = F_ECHO_DEL_MAX;
+    // echoes          = F_ECHO_N_MIN;
+
+    // Echo filter test: 1 echo, delay 200ms (8kHz)
+    // filter          = F_ECHO;
+    // echo_delay      = F_ECHO_DEL_MAX>>1;
+    // echoes          = F_ECHO_N_MIN;
+
+    // Echo filter test: 1 echo, delay 100ms (8kHz)
+    // filter          = F_ECHO;
+    // echo_delay      = F_ECHO_DEL_MAX>>2;
+    // echoes          = F_ECHO_N_MIN;
+
+    // Echo filter test: 2 echoes, delay 400ms (8kHz)
+    // filter          = F_ECHO;
+    // echo_delay      = F_ECHO_DEL_MAX;
+    // echoes          = 2;
+
+    // Echo filter test: 3 echoes, delay 400ms (8kHz)
+    // filter          = F_ECHO;
+    // echo_delay      = F_ECHO_DEL_MAX;
+    // echoes          = F_ECHO_N_MAX;
+
     display_parameters();
 
     // Main loop: polling on the RUN/CONFIG switch
@@ -312,15 +347,15 @@ void main(void) {
                         coef[1] = 32;   // echo
                         break;
                     case 2:
-                        coef[0] = 88;   // original signal
-                        coef[1] = 32;   // first echo
-                        coef[2] = 8;    // second echo
+                        coef[0] = 64;   // original signal
+                        coef[1] = 40;   // first echo
+                        coef[2] = 24;    // second echo
                         break;
                     case 3:
-                        coef[0] = 72;   // original signal
-                        coef[1] = 32;   // first echo
-                        coef[2] = 16;   // second echo
-                        coef[3] = 8;    // third echo
+                        coef[0] = 44;   // original signal
+                        coef[1] = 36;   // first echo
+                        coef[2] = 28;   // second echo
+                        coef[3] = 20;    // third echo
                         break;
                     default:
                         break;

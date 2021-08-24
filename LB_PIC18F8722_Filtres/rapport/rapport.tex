@@ -196,13 +196,13 @@
     La modification du type de filtre \textbf{[31]} se fait, comme la navigation, de manière circulaire : il tourne en boucle en appuyant sur le bouton \texttt{[+]} ou sur le bouton \texttt{[-]}, dans un sens de défilement ou dans l'autre. Lorsque le type de filtre est modifié, c'est tout l'affichage qui est mis à jour \textbf{[32]} car les paramètres configurables dépendent du type de filtre actif.
 
     \paragraph{}
-    La fréquence d'échantillonnage n'a que deux valeurs possibles : \SI{8}{\kilo\hertz} ou \SI{16}{\kilo\hertz}. Elle n'est donc diminuée que si elle est au maximum (de la même manière, elle ne sera augmentée que si elle est au minimum). La valeur de comparaison de l'interruption est doublée \textbf{[41]} et la valeur de la fréquence d'échantillonnage est divisée par deux \textbf{[42]} puis mise à jour sur le LCD \textbf{[43]}. La fréquence d'échantillonnage détermine la fréquence de coupure maximale qui peut être utilisée par les filtres : ce maximum est fixé à la moitié de la fréquence d'échantillonnage \textbf{[44]} (théorème de Shannon). Si les fréquences de coupure des filtres passe-bas et passe-haut dépassent cette valeur maximale, elles prennent cette nouvelle valeur et, si filtre actif est un filtre passe-bas ou passe-haut, le LCD est mis à jour \textbf{[45]}.
+    La fréquence d'échantillonnage n'a que deux valeurs possibles : \SI{8}{\kilo\hertz} ou \SI{16}{\kilo\hertz}. Elle n'est donc diminuée que si elle est au maximum (de la même manière, elle ne sera augmentée que si elle est au minimum). La valeur de comparaison de l'interruption est doublée \textbf{[41]} et la valeur de la fréquence d'échantillonnage est divisée par deux \textbf{[42]} puis mise à jour sur le LCD \textbf{[43]}. La fréquence d'échantillonnage détermine la fréquence de coupure maximale qui peut être utilisée par les filtres : ce maximum est fixé à la moitié de la fréquence d'échantillonnage \textbf{[44]} (théorème de Shannon). Si les fréquences de coupure des filtres passe-bas et passe-haut dépassent cette valeur maximale, elles prennent cette nouvelle valeur et, si filtre actif est un filtre passe-bas ou passe-haut, le LCD est mis à jour \textbf{[45]}. La fréquence d'échantillonnage détermine également la valeur maximale que peut prendre la durée de l'écho : lorsque la fréquence est divisée par deux, la durée de l'écho est doublée et si le filtre écho est sélectionné, la nouvelle valeur est affichée \textbf{[46]}.
 
     \paragraph{}
     La diminution de la première valeur met à jour \textbf{[51]}, en fonction du filtre actif, soit : le coefficient du filtre par moyenne glissante; la fréquence de coupure du filtre passe-bas; la fréquence de coupure du filtre passe-haut; le délai du filtre echo.
 
     \paragraph{}
-    La deuxième valeur \textbf{[61]} ne concerne que le filtre echo et met à jour le nombre d'echos.
+    La deuxième valeur \textbf{[61]} ne concerne que le filtre echo et met à jour le nombre d'échos.
 
     \paragraph{}
     Ces valeurs ne peuvent être diminuées que si elles sont strictement supérieures aux valeurs minimales définies par des variables du préprocesseur. Elles sont diminuées d'un pas également défini par des variables du préprocesseur. Le même mécanisme est implémenté pour l'augmentation des valeurs.
@@ -278,6 +278,9 @@
     % -> $V_{OUT} = \frac{5 \times D_n}{2048}$ -> Dn varie entre 0 et 255 (car utilisé max à 8 bits ici) -> vout varie entre 0 et 0,62V (vérifié à l'oscillo -> ok)
 
 
+    parler aussi de la taille max des buffers en fonction de la mémoire du PIC
+
+
     \paragraph{Filtre numérique}
     %https://fr.wikipedia.org/wiki/Filtre_num%C3%A9rique
     %http://mustig.free.fr/fr/doc/exemples_commentes/doc/fil_rec.htm
@@ -298,10 +301,138 @@
 
     \section{Tests}
     % La description des tests à effectuer pour valider le programme
-    Le menu tel que conçu est utile pour le test en temps réel mais pas pour les analyses : il faut changer les paramètre de départ du menu, recompiler et lancer les différentes simulations
+    \paragraph{}
 
+    La version avec utilisation du menu a été utilisée plus en cours de développement pour vérifierque tout se passait bien, qu'un signal était bien généré etque le temps de traitement ne dépassait pas la durée de l'interruption mais pour tester le programme fini, il faut recompiler avec les bonnes valeurs
+
+    Le menu tel que conçu est utile pour le test en temps réel mais pas pour les analyses : il faut changer les paramètre de départ du menu, recompiler et lancer les différentes simulations
+    Les valeurs de test de tous les tests effectués ici sont dans le fichier principal, il suffit de décommenter le test souhaiteret d erecompiler le code pour lancer la simulation du test souhaité.
+
+    Pour les différents tests, es filtres de Laplace sont réglés avec une fréquence de coupure de 8k et 16k en fonction de la fréquence d'échantillonnage du signal en entrée.
+
+    Vérification sur la simulation en temps réel que le temps de traitemetn dusignal ne dépasse pas avec le tick de debug
+
+    Tous les signaux utilisés pour les tests et générés par les tests se trouvent dans le dossier \emph{wav}.
+
+
+
+
+
+    \subsection{Filtre écho}
+    \paragraph{}
+    Le filtre écho a été testé avec les fichiers \emph{angelou\_10s\_delay\_1s\_8k.wav} (pour une fréquence d'échantillonnage de \SI{8}{\kilo\hertz}) et \emph{angelou\_10s\_delay\_1s\_16k.wav} (pour \SI{16}{\kilo\hertz}). Le délai d'une seconde au début du fichier permet de laisser assez de temps au programme pour initialiser le filtre.
+
+    \subsubsection{Test: 1 écho, durée de 200ms (16kHz)}
+    \paragraph{}
+    Avec une fréquence d'échantillonnage de \SI{16}{\kilo\hertz}, le filtre écho peut fonctionner avec une durée maximale de \SI{200}{\milli\second}. L'audio produit permet d'entendre un léger écho (\emph{test\_echo\_1\_200ms\_16k.wav}).
+
+    \paragraph{}
+    La comparaison des signaux d'entrée et de sortie de la figure~\ref{fig:echo_16k} met en évidence l'apparition de cet écho (entouré en rouge). Cette figure vérifie également que l'écho apparaît bien \SI{200}{\milli\second} après le signal original: e.g. le deuxième écho mis en évidence sur la figure~\ref{fig:echo_16k_out} démarre à \SI{4.25}{\second}, répercutant le signal original qui démarre à \SI{4.05}{\second} (lignes oranges).
+
+    \begin{figure}[H]
+        \centering
+        \begin{subfigure}[b]{\textwidth}
+            \centering
+            \includegraphics[width=\textwidth]{./images/in_echo_16k.png}
+            \caption{Signal d'entrée}
+        \end{subfigure}
+        \begin{subfigure}[b]{\textwidth}
+            \centering
+            \includegraphics[width=\textwidth]{./images/out_echo_1_200ms_16k.png}
+            \caption{Signal de sortie}
+            \label{fig:echo_16k_out}
+        \end{subfigure}
+        \caption{Test du filtre écho : 1 écho, durée de 200ms (16kHz)}
+        \label{fig:echo_16k}
+    \end{figure}
+
+    \paragraph{}
+    L'analyse de Fourier des signaux d'entrée et de sortie montre des spectres similaires. À partie de \SI{8}{\kilo\hertz}, le spectre du signal de sortie s'éloigne du spectre du signal d'entrée à cause du bruit de quantification.
+
+    \begin{figure}[H]
+        \centering
+        \includegraphics[width=.6\textwidth]{./images/spectrum_echo_1_200ms_16k.png}
+        \caption{Test du filtre écho : spectre de 1 écho, durée de 200ms (16kHz)}
+    \end{figure}
+
+    \subsubsection{Test: 1 écho, durée de 400ms (8kHz)}
+    \paragraph{}
+    Le filtre écho a également été testé avec un écho de la durée maximale possible pour une fréquence d'échantillonnage de \SI{8}{\kilo\hertz}, i.e. \SI{400}{\milli\second}. L'audio de sortie (\emph{test\_echo\_1\_400ms\_8k.wav}) permet d'entendre clairement cet écho.
+
+    \paragraph{}
+    La comparaison des signaux d'entrée et de sortie met en évidence l'apparition de cet écho \SI{400}{\milli\second} après de signal original : e.g. le premier écho mis en évidence démarre à \SI{5.12}{\second} et répercute la portion du signal original qui débute à \SI{4.72}{\second} (lignes oranges).
+
+    \begin{figure}[H]
+        \centering
+        \begin{subfigure}[b]{\textwidth}
+            \centering
+            \includegraphics[width=\textwidth]{./images/in_echo_8k.png}
+            \caption{Signal d'entrée}
+        \end{subfigure}
+        \begin{subfigure}[b]{\textwidth}
+            \centering
+            \includegraphics[width=\textwidth]{./images/out_echo_1_400ms_8k.png}
+            \caption{Signal de sortie}
+            \label{fig:echo_8k_out}
+        \end{subfigure}
+        \caption{Test du filtre écho : 1 écho, durée de 400ms (8kHz)}
+    \end{figure}
+
+    \paragraph{}
+    L'analyse de Fourier est similaire à la précédente : les spectres des signaux d'entrée et de sortie sont identiques jusqu'à \SI{4}{\kilo\hertz} où ils commencent à s'écarter l'un de l'autre à cause du bruit de quantification.
+
+    \begin{figure}[H]
+        \centering
+        \includegraphics[width=.6\textwidth]{./images/spectrum_echo_1_400ms_8k.png}
+        \caption{Test du filtre écho : spectre de 1 écho, durée de 400ms (8kHz)}
+    \end{figure}
+
+    \subsubsection{Test: 1 écho, durée de 200ms (8kHz)}
+    \paragraph{}
+    Le filtre écho testé avec un écho d'une durée de \SI{200}{\milli\second} avec une fréquence d'échantillonnage de \SI{8}{\kilo\hertz} donne un résultat similaire au premier test. L'audio de sortie \emph{test\_echo\_1\_200ms\_8k.wav} permet d'entendre le même écho malgré la qualité d'audio moindre. Le signal de sortie est similaire : les échos apparaissent aux mêmes endroits, décalés de \SI{200}{\milli\second} par rapport au signal original.
+    \begin{figure}[H]
+        \centering
+        \includegraphics[width=\textwidth]{./images/out_echo_1_200ms_8k.png}
+        \caption{Test du filtre écho : output de 1 écho, durée de 200ms (8kHz)}
+    \end{figure}
+
+    \subsubsection{Test: 1 écho, durée de 100ms (8kHz)}
+    \paragraph{}
+    Avec une durée de \SI{100}{\milli\second}, l'écho n'est presque plus perceptible (\emph{test\_echo\_1\_100ms\_8k.wav}). Les échos générés sont bien visibles sur l'analyse du signal de sortie, décalés de \SI{100}{\milli\second} par rapport au signal original.
+    \begin{figure}[H]
+        \centering
+        \includegraphics[width=\textwidth]{./images/out_echo_1_100ms_8k.png}
+        \caption{Test du filtre écho : output de 1 écho, durée de 100ms (8kHz)}
+    \end{figure}
+
+    \subsubsection{Test: 2 échos, durée de 400ms (8kHz)}
+    \paragraph{}
+    Les échos multiples ont été testés avec une fréquence d'échantillonnage de \SI{8}{\kilo\hertz} puisqu'elle autorise une durée deux fois plus grande qu'à \SI{16}{\kilo\hertz}. La durée est réglée au maximum (\SI{400}{\milli\second}) pour pouvoir distinguer au mieux le signal original et ses échos.
+
+    \paragraph{}
+    Comme avec un seul écho, le signal original apparaît affaibli. Les échos sont moins marqués mais apparaissent bien et surtout sont bien distinguables à l'écoute (\emph{test\_echo\_2\_8k.wav}).
+    \begin{figure}[H]
+        \centering
+        \includegraphics[width=\textwidth]{./images/out_echo_2_8k.png}
+        \caption{Test du filtre écho : output de 2 échos, durée de 400ms (8kHz)}
+    \end{figure}
+
+    \subsubsection{Test: 3 échos, durée de 400ms (8kHz)}
+    \paragraph{}
+    Avec trois échos, le signal original est encore plus atténué et les échos sont plus fondus. Ils sont maintenant difficilement distinguables à l'écoute (\emph{test\_echo\_3\_8k.wav}).
+
+    \begin{figure}[H]
+        \centering
+        \includegraphics[width=\textwidth]{./images/out_echo_3_8k.png}
+        \caption{Test du filtre écho : output de 3 échos, durée de 400ms (8kHz)}
+    \end{figure}
+
+
+    \newpage
     \section{Difficultés rencontrées}
     % Le calcul des mises à échelle pour s'assurer qu'il n'y a pas de dépassement de valeurs.
+
+    % concevoir un programme qui fonctionne bien en simulation
 
 
     % \section{Configuration}
@@ -370,25 +501,10 @@
     % -> 22/02 (fin)
 
     % 1/03 interruptions prioritisées
-    Possible amélioration mais complique beaucoup la programmation. En plus, en 16kHz, on est vraiment à la limite des possibilités du processeur -> beaucoup d'interruptions en haute priorité -> les entrées et sorties risquent d'être extrêmement lentes
-
-
-    A ajouter au grafcet : ledelay de l'echo est aussi mis à jour quand on met à jour la sampling frequency
+    Possible amélioration mais complique beaucoup la programmation. En plus, en 16kHz, on est vraiment à la limite des possibilités du processeur -> beaucoup d'interruptions en haute priorité -> les entrées et sorties risquent d'être extrêmement
 
 
 
-
-
-
-    % \section{Fonctionnement du programme}
-
-
-
-    % \section{Tests}
-
-
-
-    % \section{Problèmes rencontrés}
 
 
 
