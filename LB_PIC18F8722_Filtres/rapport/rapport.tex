@@ -236,10 +236,115 @@
     % Fréquence d'échantillonnage, fréquence utile du signal et fréquence de coupure du filtre de Laplace (entre max Fs/2 et min la fréquence du signal: à la moitié de la fréquence d'échantillonnage, c'est ok pour toutes les fréquences de signaux mais pour mieux lisser, on peut jouer avec la fréquence de coupure du filtre pour la rapprocher de la fréquence du signal, d'autant plus qu'ici on a un filtre de Laplace, d'ordre 1, i.e. un simple RC qui a donc une faible sélectivité, i.e. la coupure n'est pas nette)
     % Remarque : le filtre de Laplace déphase le signal de sortie d'autant plus qu'il est plus filtrant.
 
-    Dans l'analyse de Fourier, on voit apparaître le bruit de quantification (on est en 8 bits -> c'est inévitable) : dans les hautes fréquences il y a très peu de puissance pour l'entrée mais il y en a plus pour la sortie : c'est la puissance du bruit de quantification
 
+
+    \newpage
     \section{Configuration du PIC}
     \label{section:configuration}
+
+    \paragraph{}
+    La configuration du PIC se trouve aux lignes 249 à 281 du fichier \emph{main.c}.
+
+    % 249 - 241
+    % // PIC configuration
+    % TRISE   = 0xFF;         // PORTE (menu buttons) -> input
+    % TRISGbits.TRISG0 = 0;   // TICK -> output
+    % TICK    = 0;            // TICK -> 0
+    % TRISD   = 0;            // DAC0808 -> output
+    % DAC0808 = 128;          // DAC0808 -> 0 + offset
+    % ADCON0  = 0X01;         // ADC enabled on AN0
+    % ADCON1  = 0x0E;         // AN0 -> analogic
+    % ADCON2  = 0x01;         // Left justification, 0 Tad, 8 Tosc
+    % CCP2CON = 0x0B;         // CCP2 interruption in compare mode with trigger special event
+    % CCPR2H  = 0x04;         // 1250us -> 8kHz
+    % CCPR2L  = 0xE2;
+    % T1CON   = 0x01;         // Timer1 prescale 1:8
+    % TMR1H   = 0;            // Timer1 -> 0
+    % TMR1L   = 0;
+    % RCONbits.IPEN   = 1;    // enable priority levels on interrupts
+    % INTCONbits.GIEH = 0;    // high priority interrupts disabled
+    % INTCONbits.GIEL = 0;    // low priority interrupts disabled
+    % IPR2bits.CCP2IP = 1;    // CCP2 interrupt: high priority
+    % PIE2bits.CCP2IE = 1;    // CCP2 interrupt enabled
+    % PIR2bits.CCP2IF = 0;    // CCP2 interrupt flag cleared
+    % init_SPI();             // SPI bus and peripherals initialization
+
+    % // Parameters initialization
+    % prev_mode       = MODE_NONE;            // previous mode selected: none
+    % sampling        = (int) (10000 / ((CCPR2H << 8) + CCPR2L)); // sampling frequency determined by the CCP2 value
+    % cutoff_max      = sampling*1000 >> 1;   // low/high pass filter max value determined by the sampling frequency
+    % filter          = F_MOV_AVG;            // filter selected: moving average
+    % mov_avg_coef    = F_MOV_AVG_MIN;        // moving average value: minimum
+    % low_cutoff      = F_LOW_PASS_MIN;       // low-pass cutoff value: minimum
+    % high_cutoff     = cutoff_max;           // high-pass cutoff value: maximum
+    % echo_delay      = F_ECHO_DEL_MIN;       // echo delay: minimum
+    % echoes          = F_ECHO_N_MIN;         // number of echoes: minimum
+
+    \subsection{Configuration de la conversion analogique-digitale}
+
+    % \paragraph{Conversion analogique-digitale (A/D conversion)}
+    % ADCON0 permet de :
+    % - activer la conversion (bit ADON)
+    % - vérifier quand la conversion est faite (bit GO/DONE)
+    % - sélectionner l'entrée analogique liée à l'ADC
+
+    % ADCON1 :
+    % permet de
+    % - configurer les entrées en analogique ou digital (TOR)
+    % Par défaut, tout est analogique. Ici on sera en 1101 (AN0 AN1), éventuellement 1011 (de AN0-3, AN2-3 étant des PIN de tension de ref) -> attention aux PIN en TOR dont on a besoin
+    % - configurer les tensions de référence du module ADC et d'où elles viennent
+    % Pour le programme, on travaille en mode 0 (mode par défaut), i.e. tensions de référence sur VDD et VSS (entre 0 et 5V)
+
+    % ADCON2
+    % gère le fonctionnement technique du module ADC, dont
+    % - sa justification à droite ou à gauche (bit ADFM)
+    % - la configuration du temps d'acquisition (ACQT<2:0>)
+    % - la configuration de la fréquence de conversion, dérivée par rapport à la fréquence de l'oscillateur (ADCS<2:0>)
+
+    % ADRESH et ADRESL
+    % contiennent le résultat de la conversion
+
+
+    % 1 Entrées analogiques ou digitales ? -< configuration de ADCON1
+
+    % 2 Tensions de référence ? -> 00
+
+    % 3 Temps de conversion ? il faut 12 temps TAD avant de finir la conversion et d'avoir le déclenchement du GO/DONE
+    % valeur min de TAD = 0,7us
+    % valeur de TAD fixé par le quartz et les bits ADCS<2:0> de l'ADCON2
+
+    % à 10MHz HSPLL, 1 tosc = 0,1us
+    % puisqu'il faut min 0,7us => il faut choisir le 8tosc (001)
+
+    % => le temps de conversion va durer 12*8TOSC = 0,96us
+    % => on peut tenir une fréquence théorique max de 100kHz
+    % (limite théorique mais en pratique on doit aller moins vite pour garder de la puissance processeur pour autre chose)
+
+    % 4 Temps d'acquisition ? ACQT<2:0>
+    % typiquement, dans un système qui ne fait pas que de la conversion, on le laisse à 0 parce que le temps de conversion est là en ayant fait autre chose avant.
+
+    % 5 Justification de résultat ? ADFM
+    % 8 bits -> à gauche et on utilise que adresh
+    % 10 bits -> à droite et on utilise adresh et l
+
+    % 6 Choix du canal de conversion ? ADCON0
+    % Ici avec Proteus on n'est pas limité par un hardware déjà soudé
+
+    % 7 Alimentation du CAN ?
+    % Dernière étape : activer l'ADC avec le bit ADON
+
+    % Utilisation : on met 1 dans le GO/DONE et on attend que ça saute pour avoir le résultat
+
+    %=================================================
+
+
+
+
+
+
+
+
+
     % La description de la configuration du PIC utilisée
     % DAC0808 banché directement sur le port D plutôt que via un bus de communication (SPI ou I2C) -> plus rapide -> fréquence d'échantillonnage + élevée (50 kHz au lieu de 20kHz via SPI)
 
@@ -299,21 +404,20 @@
     Attention à la taille du vecteur : c'est beaucoup plus simple de gérer le vecteur en C qu'en assembleur (cf projet précédent) mais il faut quand même regarder la taille de la mémoire dans la datasheet pour ne pas dépasser. Le prof a mis un max de 3600 car on a une mémoire de 4k. Le seul moyen d'allonger les temps d'echos est de jouer sur la fréquence d'échantillonnage
 
 
+    \newpage
     \section{Tests}
-    % La description des tests à effectuer pour valider le programme
+
     \paragraph{}
+    Tout au long du développement, le programme a été testé avec la simulation Proteus et les différents outils à disposition. L'oscilloscope branché sur les différentes PIN a permis de vérifier la génération d'un signal en sortie des DAC et en sortie des filtres de Laplace mais aussi de s'assurer que la durée de traitement ne dépasse pas la durée de l'interruption grâce à la PIN activée durant le traitement du signal ou encore de débugger les communications via le bus SPI.
 
-    La version avec utilisation du menu a été utilisée plus en cours de développement pour vérifierque tout se passait bien, qu'un signal était bien généré etque le temps de traitement ne dépassait pas la durée de l'interruption mais pour tester le programme fini, il faut recompiler avec les bonnes valeurs
+    \paragraph{}
+    Une fois la programmation du filtre terminée, la sortie des filtres a été validée avec les analyses de Fourier et les analyses de signaux audio générées dans Proteus. Ce sont les résultats de ces tests qui sont présentés dans cette section. Ils ont été produits en changeant les paramètre d'initialisation du filtre avant la compilation du programme. Tous les tests réalisés se trouvent dans le code source et il suffit de décommenter le test souhaité pour le reproduire.
 
-    Le menu tel que conçu est utile pour le test en temps réel mais pas pour les analyses : il faut changer les paramètre de départ du menu, recompiler et lancer les différentes simulations
-    Les valeurs de test de tous les tests effectués ici sont dans le fichier principal, il suffit de décommenter le test souhaiteret d erecompiler le code pour lancer la simulation du test souhaité.
+    \paragraph{}
+    Pour les différents tests, les fréquences de coupures des filtres de Laplace en sortie des DAC on été réglées soit à \SI{16}{\kilo\hertz} soit à \SI{8}{\kilo\hertz} en fonction de la fréquence d'échantillonnage testée (ce paramètre est affiché sous le filtre dans le projet Proteus). Le fichier d'entrée a également été échantillonné à \SI{16}{\kilo\hertz} ou à \SI{8}{\kilo\hertz}, ce qui permet de se passer de filtre anti-repliement.
 
-    Pour les différents tests, es filtres de Laplace sont réglés avec une fréquence de coupure de 8k et 16k en fonction de la fréquence d'échantillonnage du signal en entrée.
-
-    Vérification sur la simulation en temps réel que le temps de traitemetn dusignal ne dépasse pas avec le tick de debug
-
-    Tous les signaux utilisés pour les tests et générés par les tests se trouvent dans le dossier \emph{wav}.
-
+    \paragraph{}
+    Tous les signaux utilisés pour les tests et tous les signaux générés par les tests se trouvent dans le dossier \emph{wav} du projet.
 
 
     \subsection{Filtre par moyenne glissante}
@@ -323,21 +427,129 @@
     \paragraph{}
     Le filtre par moyenne possible implémente assez peu de combinaisons possibles de coefficient et de fréquence d'échantillonnage que pour pouvoir les tester toutes.
 
-    \subsubsection{Test : coefficient 2 (16kHz)}
-    \subsubsection{Test : coefficient 4 (16kHz)}
-    \subsubsection{Test : coefficient 8 (16kHz)}
+    \paragraph{}
+    Que ce soit en \SI{16}{\kilo\hertz} ou en \SI{8}{\kilo\hertz}, les tests mettent en évidence que le filtre est d'autant plus filtrant que son coefficient est élevé. Plus le coefficient augment, plus le signal de sortie est atténué par rapport au signal d'entrée. Les fréquences du signal de sortie sont également de plus affaiblies à mesure que le coefficient du filtre augmente.
 
+    \paragraph{}
+    Les hautes fréquences sont par contre plus puissantes pour le signal de sortie que pour le signal d'entrée : il s'agit du bruit de quantification. Ce bruit n'est pas lié au filtre mais au traitement numérique d'un signal analogique : il apparaît également quand le signal lu est directement reporté sur la DAC.
 
-    \subsubsection{Test : coefficient 2 (8kHz)}
-    \subsubsection{Test : coefficient 4 (8kHz)}
-    \subsubsection{Test : coefficient 8 (8kHz)}
+    \begin{figure}[H]
+        \centering
+        \includegraphics[width=.6\textwidth]{./images/spectrum_no_filter_8k.png}
+        \caption{Spectre du signal d'entrée et du signal d'entrée lu par le programme et reporté sur le DAC sans modification (8kHz)}
+    \end{figure}
 
+    \paragraph{}
+    Les fichiers audio produits permettent également d'entendre la dégradation progressive du signal : à mesure que le coefficient du filtre augmente, le son paraît de plus en plus étouffé. Les signaux produits sont enregistrés dans les fichiers :
+    \begin{itemize}
+        \item \emph{test\_mov\_avg\_2\_16k.wav} (filtre d'ordre 2 en \SI{16}{\kilo\hertz})
+        \item \emph{test\_mov\_avg\_4\_16k.wav} (filtre d'ordre 4 en \SI{16}{\kilo\hertz})
+        \item \emph{test\_mov\_avg\_8\_16k.wav} (filtre d'ordre 8 en \SI{16}{\kilo\hertz})
+        \item \emph{test\_mov\_avg\_2\_8k.wav} (filtre d'ordre 2 en \SI{8}{\kilo\hertz})
+        \item \emph{test\_mov\_avg\_4\_8k.wav} (filtre d'ordre 4 en \SI{8}{\kilo\hertz})
+        \item \emph{test\_mov\_avg\_8\_8k.wav} (filtre d'ordre 8 en \SI{8}{\kilo\hertz})
+    \end{itemize}
 
+    \subsubsection{Test : filtre d'ordre 2 (16kHz)}
+    \begin{figure}[H]
+        \centering
+        \begin{subfigure}[b]{\textwidth}
+            \centering
+            \includegraphics[width=.6\textwidth]{./images/spectrum_mov_avg_2_16k.png}
+            \caption{Analyse fréquentielle}
+        \end{subfigure}
+        \begin{subfigure}[b]{\textwidth}
+            \centering
+            \includegraphics[width=\textwidth]{./images/out_mov_avg_2_16k.png}
+            \caption{Analyse temporelle}
+        \end{subfigure}
+        \caption{Test du filtre par moyenne glissante d'ordre 2 (16kHz)}
+    \end{figure}
 
+    \subsubsection{Test : filtre d'ordre 4 (16kHz)}
+    \begin{figure}[H]
+        \centering
+        \begin{subfigure}[b]{\textwidth}
+            \centering
+            \includegraphics[width=.6\textwidth]{./images/spectrum_mov_avg_4_16k.png}
+            \caption{Analyse fréquentielle}
+        \end{subfigure}
+        \begin{subfigure}[b]{\textwidth}
+            \centering
+            \includegraphics[width=\textwidth]{./images/out_mov_avg_4_16k.png}
+            \caption{Analyse temporelle}
+        \end{subfigure}
+        \caption{Test du filtre par moyenne glissante d'ordre 4 (16kHz)}
+    \end{figure}
 
+    \subsubsection{Test : filtre d'ordre 8 (16kHz)}
+    \begin{figure}[H]
+        \centering
+        \begin{subfigure}[b]{\textwidth}
+            \centering
+            \includegraphics[width=.6\textwidth]{./images/spectrum_mov_avg_8_16k.png}
+            \caption{Analyse fréquentielle}
+        \end{subfigure}
+        \begin{subfigure}[b]{\textwidth}
+            \centering
+            \includegraphics[width=\textwidth]{./images/out_mov_avg_8_16k.png}
+            \caption{Analyse temporelle}
+        \end{subfigure}
+        \caption{Test du filtre par moyenne glissante d'ordre 8 (16kHz)}
+    \end{figure}
+
+    \subsubsection{Test : filtre d'ordre 2 (8kHz)}
+    \begin{figure}[H]
+        \centering
+        \begin{subfigure}[b]{\textwidth}
+            \centering
+            \includegraphics[width=.6\textwidth]{./images/spectrum_mov_avg_2_8k.png}
+            \caption{Analyse fréquentielle}
+        \end{subfigure}
+        \begin{subfigure}[b]{\textwidth}
+            \centering
+            \includegraphics[width=\textwidth]{./images/out_mov_avg_2_8k.png}
+            \caption{Analyse temporelle}
+        \end{subfigure}
+        \caption{Test du filtre par moyenne glissante d'ordre 2 (8kHz)}
+    \end{figure}
+
+    \subsubsection{Test : filtre d'ordre 4 (8kHz)}
+    \begin{figure}[H]
+        \centering
+        \begin{subfigure}[b]{\textwidth}
+            \centering
+            \includegraphics[width=.6\textwidth]{./images/spectrum_mov_avg_4_8k.png}
+            \caption{Analyse fréquentielle}
+        \end{subfigure}
+        \begin{subfigure}[b]{\textwidth}
+            \centering
+            \includegraphics[width=\textwidth]{./images/out_mov_avg_4_8k.png}
+            \caption{Analyse temporelle}
+        \end{subfigure}
+        \caption{Test du filtre par moyenne glissante d'ordre 4 (8kHz)}
+    \end{figure}
+
+    \subsubsection{Test : filtre d'ordre 8 (8kHz)}
+    \begin{figure}[H]
+        \centering
+        \begin{subfigure}[b]{\textwidth}
+            \centering
+            \includegraphics[width=.6\textwidth]{./images/spectrum_mov_avg_8_8k.png}
+            \caption{Analyse fréquentielle}
+        \end{subfigure}
+        \begin{subfigure}[b]{\textwidth}
+            \centering
+            \includegraphics[width=\textwidth]{./images/out_mov_avg_8_8k.png}
+            \caption{Analyse temporelle}
+        \end{subfigure}
+        \caption{Test du filtre par moyenne glissante d'ordre 8 (8kHz)}
+    \end{figure}
 
 
     \subsection{Filtre passe-bas}
+
+
     \subsection{Filtre passe-haut}
 
 
@@ -383,7 +595,7 @@
     Le filtre écho a également été testé avec un écho de la durée maximale possible pour une fréquence d'échantillonnage de \SI{8}{\kilo\hertz}, i.e. \SI{400}{\milli\second}. L'audio de sortie (\emph{test\_echo\_1\_400ms\_8k.wav}) permet d'entendre clairement cet écho.
 
     \paragraph{}
-    La comparaison des signaux d'entrée et de sortie met en évidence l'apparition de cet écho \SI{400}{\milli\second} après de signal original : e.g. le premier écho mis en évidence démarre à \SI{5.12}{\second} et répercute la portion du signal original qui débute à \SI{4.72}{\second} (lignes oranges).
+    La comparaison des signaux d'entrée et de sortie met en évidence l'apparition de cet écho \SI{400}{\milli\second} après le signal original : e.g. le premier écho mis en évidence démarre à \SI{5.12}{\second} et répercute la portion du signal original qui débute à \SI{4.72}{\second} (lignes oranges).
 
     \begin{figure}[H]
         \centering
@@ -460,69 +672,10 @@
     % proposer à la fois un menu assez riche et économiser l'espace pour le réserver pour les buffers: il n'y avait pas durée d'écho minimale précisée donc ça va mais j'aurais clairement pu faire mieux (aller jusqu'à 450 ms pour du 8k)
 
     % \section{Configuration}
-    % \paragraph{Conversion analogique-digitale (A/D conversion)}
-    % ADCON0 permet de :
-    % - activer la conversion (bit ADON)
-    % - vérifier quand la conversion est faite (bit GO/DONE)
-    % - sélectionner l'entrée analogique liée à l'ADC
-
-    % ADCON1 :
-    % permet de
-    % - configurer les entrées en analogique ou digital (TOR)
-    % Par défaut, tout est analogique. Ici on sera en 1101 (AN0 AN1), éventuellement 1011 (de AN0-3, AN2-3 étant des PIN de tension de ref) -> attention aux PIN en TOR dont on a besoin
-    % - configurer les tensions de référence du module ADC et d'où elles viennent
-    % Pour le programme, on travaille en mode 0 (mode par défaut), i.e. tensions de référence sur VDD et VSS (entre 0 et 5V)
-
-    % ADCON2
-    % gère le fonctionnement technique du module ADC, dont
-    % - sa justification à droite ou à gauche (bit ADFM)
-    % - la configuration du temps d'acquisition (ACQT<2:0>)
-    % - la configuration de la fréquence de conversion, dérivée par rapport à la fréquence de l'oscillateur (ADCS<2:0>)
-
-    % ADRESH et ADRESL
-    % contiennent le résultat de la conversion
-
-
-    % 1 Entrées analogiques ou digitales ? -< configuration de ADCON1
-
-    % 2 Tensions de référence ? -> 00
-
-    % 3 Temps de conversion ? il faut 12 temps TAD avant de finir la conversion et d'avoir le déclenchement du GO/DONE
-    % valeur min de TAD = 0,7us
-    % valeur de TAD fixé par le quartz et les bits ADCS<2:0> de l'ADCON2
-
-    % à 10MHz HSPLL, 1 tosc = 0,1us
-    % puisqu'il faut min 0,7us => il faut choisir le 8tosc (001)
-
-    % => le temps de conversion va durer 12*8TOSC = 0,96us
-    % => on peut tenir une fréquence théorique max de 100kHz
-    % (limite théorique mais en pratique on doit aller moins vite pour garder de la puissance processeur pour autre chose)
-
-    % 4 Temps d'acquisition ? ACQT<2:0>
-    % typiquement, dans un système qui ne fait pas que de la conversion, on le laisse à 0 parce que le temps de conversion est là en ayant fait autre chose avant.
-
-    % 5 Justification de résultat ? ADFM
-    % 8 bits -> à gauche et on utilise que adresh
-    % 10 bits -> à droite et on utilise adresh et l
-
-    % 6 Choix du canal de conversion ? ADCON0
-    % Ici avec Proteus on n'est pas limité par un hardware déjà soudé
-
-    % 7 Alimentation du CAN ?
-    % Dernière étape : activer l'ADC avec le bit ADON
-
-    % Utilisation : on met 1 dans le GO/DONE et on attend que ça saute pour avoir le résultat
-
-    % Code d'exemple
-    % fréquence d'échantillonnage de 20kHz
 
 
 
-    % Filtre echo :
-    % Paramètres :
 
-    % - poids de l'echo (weight)
-    % -> 22/02 (fin)
 
     % 1/03 interruptions prioritisées
     Possible amélioration mais complique beaucoup la programmation. En plus, en 16kHz, on est vraiment à la limite des possibilités du processeur -> beaucoup d'interruptions en haute priorité -> les entrées et sorties risquent d'être extrêmement

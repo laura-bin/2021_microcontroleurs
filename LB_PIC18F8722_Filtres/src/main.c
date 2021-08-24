@@ -280,15 +280,54 @@ void main(void) {
     echo_delay      = F_ECHO_DEL_MIN;       // echo delay: minimum
     echoes          = F_ECHO_N_MIN;         // number of echoes: minimum
 
+    // Moving average filter test: coef 4 (16kHz)
+    filter          = F_MOV_AVG;
+    mov_avg_coef    = 2;
+    // CCPR2H          = CCPR2H >> 1;
+    // CCPR2L          = CCPR2L >> 1;
+    // sampling        = sampling << 1;
 
+    // Moving average filter test: coef 2 (8kHz)
+    filter          = F_MOV_AVG;
+    mov_avg_coef    = 1;
+
+    // Moving average filter test: coef 4 (8kHz)
+    filter          = F_MOV_AVG;
+    mov_avg_coef    = 2;
+
+    // Moving average filter test: coef 8 (8kHz)
+    filter          = F_MOV_AVG;
+    mov_avg_coef    = 3;
+
+    // Moving average filter test: coef 2 (16kHz)
+    // filter          = F_MOV_AVG;
+    // mov_avg_coef    = 1;
+    // CCPR2H          = CCPR2H >> 1;
+    // CCPR2L          = CCPR2L >> 1;
+    // sampling        = sampling << 1;
+
+    // Moving average filter test: coef 2-4-8 (16kHz)
+    // filter          = F_MOV_AVG;
+    // mov_avg_coef    = 1;
+    // mov_avg_coef    = 2;
+    // mov_avg_coef    = 3;
+    // CCPR2H          = CCPR2H >> 1;
+    // CCPR2L          = CCPR2L >> 1;
+    // sampling        = sampling << 1;
+
+    // Moving average filter test: coef 2-4-8 (8kHz)
+    filter          = F_MOV_AVG;
+    mov_avg_coef    = 1;
+    // mov_avg_coef    = 2;
+    // mov_avg_coef    = 3;
 
     // Echo filter test: 1 echo, delay 200ms (16kHz)
-    filter          = F_ECHO;
-    CCPR2H          = CCPR2H >> 1;
-    CCPR2L          = CCPR2L >> 1;
-    sampling        = sampling << 1;
-    echo_delay      = F_ECHO_DEL_MAX;
-    echoes          = F_ECHO_N_MIN;
+    // filter          = F_ECHO;
+    // CCPR2H          = CCPR2H >> 1;
+    // CCPR2L          = CCPR2L >> 1;
+    // sampling        = sampling << 1;
+    // echo_delay      = F_ECHO_DEL_MAX;
+    // echoes          = F_ECHO_N_MIN;
 
     // Echo filter test: 1 echo, delay 400ms (8kHz)
     // filter          = F_ECHO;
