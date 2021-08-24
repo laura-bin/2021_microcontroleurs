@@ -316,6 +316,29 @@
 
 
 
+    \subsection{Filtre par moyenne glissante}
+    \paragraph{}
+    Les tests du filtre par moyenne glissante ont été effectués sur l'audio \emph{drake\_30s\_delay\_1s\_8k.wav} pour les tests faits avec une fréquence d'échantillonnage de \SI{8}{\kilo\hertz} et \emph{drake\_30s\_delay\_1s\_16k.wav} pour une fréquence d'échantillonnage de \SI{16}{\kilo\hertz}. Le délai d'une seconde permet de laisser le temps au programme de s'initialiser.
+
+    \paragraph{}
+    Le filtre par moyenne possible implémente assez peu de combinaisons possibles de coefficient et de fréquence d'échantillonnage que pour pouvoir les tester toutes.
+
+    \subsubsection{Test : coefficient 2 (16kHz)}
+    \subsubsection{Test : coefficient 4 (16kHz)}
+    \subsubsection{Test : coefficient 8 (16kHz)}
+
+
+    \subsubsection{Test : coefficient 2 (8kHz)}
+    \subsubsection{Test : coefficient 4 (8kHz)}
+    \subsubsection{Test : coefficient 8 (8kHz)}
+
+
+
+
+
+
+    \subsection{Filtre passe-bas}
+    \subsection{Filtre passe-haut}
 
 
     \subsection{Filtre écho}
@@ -434,6 +457,7 @@
 
     % concevoir un programme qui fonctionne bien en simulation
 
+    % proposer à la fois un menu assez riche et économiser l'espace pour le réserver pour les buffers: il n'y avait pas durée d'écho minimale précisée donc ça va mais j'aurais clairement pu faire mieux (aller jusqu'à 450 ms pour du 8k)
 
     % \section{Configuration}
     % \paragraph{Conversion analogique-digitale (A/D conversion)}
