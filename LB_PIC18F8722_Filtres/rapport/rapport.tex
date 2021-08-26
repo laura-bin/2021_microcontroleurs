@@ -302,7 +302,7 @@
     Le projet aurait pu implémenter une lecture des entrées via le bus SPI et une interruption de faible priorité. Ce n'est pas le cas car le programme principal utilise déjà le bus SPI pour communiquer avec le LCD et les communications entreraient en conflit.
 
     \paragraph{}
-    La PIn permettant de vérifier le temps d'exécution de l'interruption est configurée en output et initialisée à 0.
+    La PIN permettant de vérifier le temps d'exécution de l'interruption est configurée en output et initialisée à 0.
     \begin{verbatimtab}
     [251]    TRISGbits.TRISG0 = 0;   // TICK -> output
     [252]    TICK    = 0;            // TICK -> 0
@@ -325,7 +325,7 @@
     Une fois la programmation du filtre terminée, la sortie des filtres a été validée avec les analyses de Fourier et les analyses de signaux audio générées dans Proteus. Ce sont les résultats de ces tests qui sont présentés dans cette section. Ils ont été produits en changeant les paramètre d'initialisation du filtre avant la compilation du programme. Tous les tests réalisés se trouvent dans le code source et il suffit de décommenter le test souhaité pour le reproduire.
 
     \paragraph{}
-    Pour les différents tests, les fréquences de coupures des filtres de Laplace en sortie des DAC on été réglées soit à \SI{8}{\kilo\hertz} soit à \SI{4}{\kilo\hertz} en fonction de la fréquence d'échantillonnage testée (ce paramètre est affiché sous le filtre dans le projet Proteus).
+    Pour les différents tests, les fréquences de coupures des filtres de Laplace en sortie des DAC ont été réglées soit à \SI{8}{\kilo\hertz} soit à \SI{4}{\kilo\hertz} en fonction de la fréquence d'échantillonnage testée (ce paramètre est affiché sous le filtre dans le projet Proteus).
 
     \paragraph{}
     Tous les signaux utilisés pour les tests et tous les signaux générés par les tests se trouvent dans le dossier \emph{wav} du projet.
@@ -339,10 +339,10 @@
     Le filtre par moyenne glissante implémente assez peu de combinaisons possibles de coefficient et de fréquence d'échantillonnage que pour pouvoir les tester toutes.
 
     \paragraph{}
-    Que ce soit en \SI{16}{\kilo\hertz} ou en \SI{8}{\kilo\hertz}, les tests mettent en évidence que le filtre est d'autant plus filtrant que son coefficient est élevé. Plus le coefficient augmente, plus le signal de sortie est atténué par rapport au signal d'entrée. Les fréquences du signal de sortie sont également de plus affaiblies à mesure que le coefficient du filtre augmente.
+    Que ce soit en \SI{16}{\kilo\hertz} ou en \SI{8}{\kilo\hertz}, les tests mettent en évidence que le filtre est d'autant plus filtrant que son coefficient est élevé. Plus le coefficient augmente, plus le signal de sortie est atténué par rapport au signal d'entrée. Les fréquences du signal de sortie sont également de plus en plus affaiblies à mesure que le coefficient du filtre augmente.
 
     \paragraph{}
-    Les hautes fréquences sont par contre plus puissantes pour le signal de sortie que pour le signal d'entrée : il s'agit du bruit de quantification. Ce bruit n'est pas lié au filtre mais au traitement numérique d'un signal analogique : il apparaît également quand le signal lu est directement reporté sur la DAC.
+    Les hautes fréquences sont par contre plus puissantes pour le signal de sortie que pour le signal d'entrée : il s'agit du bruit de quantification. Ce bruit n'est pas lié au filtre mais au traitement numérique d'un signal analogique : il apparaît également quand le signal lu est directement reporté sur le DAC.
 
     \begin{figure}[H]
         \centering
