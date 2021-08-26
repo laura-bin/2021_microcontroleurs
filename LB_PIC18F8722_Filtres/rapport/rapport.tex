@@ -24,7 +24,7 @@
 \usepackage{fancyhdr}       % en-têtes
 \usepackage{lastpage}       % numéro de dernière page
 
-\title{Systèmes logiques programmés\bigbreak \bigbreak
+\title{Microcontrôleurs\bigbreak \bigbreak
     \large Dossier récapitulatif\bigbreak
     \normalsize Programmation d'un générateur de signaux en assembleur sur PIC16F887\bigbreak}
 \date{2020 -- 2021}
@@ -33,7 +33,7 @@
 \pagestyle{fancy}
 \renewcommand\headrulewidth{1pt}
 \fancyhead[L]{Laura Binacchi}
-\fancyhead[C]{Systèmes logiques programmés}
+\fancyhead[C]{Microcontrôleurs}
 \fancyhead[R]{\today}
 
 
@@ -89,23 +89,6 @@
         \centering
         \includegraphics[width=.7\textwidth]{./images/menus.png}
     \end{figure}
-
-
-    % Moyennes glissantes : implémenter des pas en puissance de 2 permet d'implementer une frequence d'echantillonnage plus elevee, i.e. 16k au lieu de 8 car la rotation de bits est plus rapide que
-
-    % Remarques sur le projet Proteus
-    % pas de filtre anti aliasing car l'audio d'entrée est déjà échantillonné à la bonne fréquence (sinon on pourrait rajouter un filtre de laplace aussi en entrée). Mais ici, la simulation est déjà assez lente...
-
-    % Attention pour les analyses de Fourier : bien setter la fréquence max à la fréquence utile du signal (-> Fe/2), changer aussi la fréquence de coupure du filtre
-
-
-    % Cahier des charges : c'est mieux de
-    % - mettre au point un menu circulaire
-    % - connecter le MCP que le DAC (attention aux conflits avec de LCD)
-
-    % Dans le travail : mettre en avant les réglages du filtre et les effets sur le signal. Attention, plus le filtre est filtrant, plus le signal de sortie est déphasé -> le signal est plus lisse (beau) mais déphasé
-    % Mettre en avant l'utilisation du tick et de l'oscilloscope.
-
 
     \newpage
     \section{Organigramme de haut niveau}
@@ -222,20 +205,18 @@
 
 
 
-
-
-
-
-
-    % Ici il y aurait eu un intérêt à faire comme dans le projet de SLP : connecter les boutons à un I/O expander SPI qui déclencherait une interruption de priorité plus faible que l'interruption qui génère le signal. Dans ce cas, il aurait également fallu veiller à mettre des verrous sur les opérations de communication SPI pour qu'elles puissent se dérouler correctement sans interruption. Cette remarque s'applique particulièrement dans le cas ou un MCP4922 est utilisé plutôt qu'un DAC0808 puisque la communication entre le PIC et le DAC dans l'interruption principale se fait via un bus SPI.
-
-
-    \newpage
     \section{Fréquences utilisées}
-    % La description et la justification des fréquences utilisées
-    % Fréquence d'échantillonnage, fréquence utile du signal et fréquence de coupure du filtre de Laplace (entre max Fs/2 et min la fréquence du signal: à la moitié de la fréquence d'échantillonnage, c'est ok pour toutes les fréquences de signaux mais pour mieux lisser, on peut jouer avec la fréquence de coupure du filtre pour la rapprocher de la fréquence du signal, d'autant plus qu'ici on a un filtre de Laplace, d'ordre 1, i.e. un simple RC qui a donc une faible sélectivité, i.e. la coupure n'est pas nette)
-    % Remarque : le filtre de Laplace déphase le signal de sortie d'autant plus qu'il est plus filtrant.
+    \paragraph{}
+    Le cahier des charges demande d'implémenter des fréquences d'échantillonnage de 8 et de \SI{16}{\kilo\hertz}. Conformément au théorème de de Nyquist-Shannon les fréquences utiles des signaux sont donc respectivement limitées à 4 et à \SI{8}{\kilo\hertz}.
 
+    \paragraph{}
+    Les différents signaux testés ont été échantillonnés à 8 ou à \SI{16}{\kilo\hertz} permettant de se passer d'un filtre anti-repliement à l'entrée du signal. En sortie, les filtres de Laplace sont réglés à la fréquence utile du signal testé.
+
+    \paragraph{}
+    Les analyses de Fourier présentent également le spectre de fréquence sur la plage de fréquence utile du signal, soit 8 ou \SI{16}{\kilo\hertz}.
+
+    \paragraph{}
+    La fréquence d'échantillonnage est implémentée par le programme en déclenchant une interruption à un intervalle déterminé : toutes les \SI{125}{\micro\second} pour du \SI{8}{\kilo\hertz} ou toutes les \SI{62.5}{\micro\second} pour du \SI{16}{\kilo\hertz}. La configuration de l'interruption est détaillée à la section~\ref{section:interruption}.
 
 
     \newpage
@@ -243,44 +224,78 @@
     \label{section:configuration}
 
     \paragraph{}
-    La configuration du PIC se trouve aux lignes 249 à 281 du fichier \emph{main.c}.
+    Le PIC est configuré par les instructions d'initialisation de ses différents registres aux lignes 250 à 270 du fichier \emph{main.c} et par les directives de préprocesseur (\emph{pragmas} aux lignes 28 à 100.
 
-    % 249 - 241
+    \subsection{Oscillateur}
+    La première directive de préprocesseur configure l'oscillateur en mode HSPLL. Ce mode multiplie par 4 la fréquence de l'oscillateur. Une fréquence de \SI{10}{\mega\hertz} correspond donc à un temps de cycle CPU de \SI{0.1}{\micro\second}.
+    \begin{verbatimtab}
+     [29]    #pragma config OSC = HSPLL
+    \end{verbatimtab}
+
+    \subsection{Interruption}
+    \label{section:interruption}
+    \paragraph{}
+    Le traitement du signal est effectué par une interruption générée par le module CCP2 et le Timer1. Le module CCP2 est activé en mode comparateur avec special event trigger : à chaque interruption, le timer est réinitialisé et la conversion analogique-digitale est déclenchée automatiquement.
+    \begin{verbatimtab}
+    [258]    CCP2CON = 0x0B;         // CCP2 interruption in compare mode
+                                             with trigger special event
+    \end{verbatimtab}
+
+    \paragraph{}
+    Le Timer1 est activé avec un prescaler 1:1 : une valeur de comparaison de 1 déclencherait une interruption tous les cycles CPU, i.e. toutes les \SI{0.1}{\micro\second}.
+    \begin{verbatimtab}
+    [261]    T1CON   = 0x01;         // Timer1 prescale 1:1
+    [262]    TMR1H   = 0;            // Timer1 -> 0
+    [263]    TMR1L   = 0;
+    \end{verbatimtab}
+
+    \paragraph{}
+    La valeur de comparaison est initialisée à 1250 (\texttt{0x04E2}). L'interruption surviendra donc toutes les \SI{125}{\micro\second}, ce qui correspond à une fréquence de \SI{8}{\kilo\hertz}. Pour fonctionner à une fréquence d'échantillonnage de \SI{16}{\kilo\hertz}, cette valeur est divisée par 2.
+    \begin{verbatimtab}
+    [259]    CCPR2H  = 0x04;         // 1250us -> 8kHz
+    [260]    CCPR2L  = 0xE2;
+    \end{verbatimtab}
+
+    \paragraph{}
+    Les interruptions prioritisées sont activées et les interruptions de haute et de basse priorité sont désactivées. Les interruptions de haute priorité seront activée après l'initialisation si le mode de traitement du signal est actif.
+    \begin{verbatimtab}
+    [264]    RCONbits.IPEN   = 1;    // enable priority levels on interrupts
+    [265]    INTCONbits.GIEH = 0;    // high priority interrupts disabled
+    [266]    INTCONbits.GIEL = 0;    // low priority interrupts disabled
+    \end{verbatimtab}
+
+    \paragraph{}
+    Une haute priorité est accordée à l'interruption par le module CCP2. L'interruption est activée (et son flag effacé). Elle ne sera effectivement active que quand les interruptions de haute priorité auront été activées.
+    \begin{verbatimtab}
+    [267]    IPR2bits.CCP2IP = 1;    // CCP2 interrupt: high priority
+    [268]    PIE2bits.CCP2IE = 1;    // CCP2 interrupt enabled
+    [269]    PIR2bits.CCP2IF = 0;    // CCP2 interrupt flag cleared
+    \end{verbatimtab}
+
+
     % // PIC configuration
-    % TRISE   = 0xFF;         // PORTE (menu buttons) -> input
-    % TRISGbits.TRISG0 = 0;   // TICK -> output
-    % TICK    = 0;            // TICK -> 0
-    % TRISD   = 0;            // DAC0808 -> output
-    % DAC0808 = 128;          // DAC0808 -> 0 + offset
-    % ADCON0  = 0X01;         // ADC enabled on AN0
-    % ADCON1  = 0x0E;         // AN0 -> analogic
-    % ADCON2  = 0x01;         // Left justification, 0 Tad, 8 Tosc
-    % CCP2CON = 0x0B;         // CCP2 interruption in compare mode with trigger special event
-    % CCPR2H  = 0x04;         // 1250us -> 8kHz
-    % CCPR2L  = 0xE2;
-    % T1CON   = 0x01;         // Timer1 prescale 1:8
-    % TMR1H   = 0;            // Timer1 -> 0
-    % TMR1L   = 0;
-    % RCONbits.IPEN   = 1;    // enable priority levels on interrupts
-    % INTCONbits.GIEH = 0;    // high priority interrupts disabled
-    % INTCONbits.GIEL = 0;    // low priority interrupts disabled
-    % IPR2bits.CCP2IP = 1;    // CCP2 interrupt: high priority
-    % PIE2bits.CCP2IE = 1;    // CCP2 interrupt enabled
-    % PIR2bits.CCP2IF = 0;    // CCP2 interrupt flag cleared
-    % init_SPI();             // SPI bus and peripherals initialization
+    % [250]    TRISE   = 0xFF;         // PORTE (menu buttons) -> input
+    % [251]    TRISGbits.TRISG0 = 0;   // TICK -> output
+    % [252]    TICK    = 0;            // TICK -> 0
+    % [253]    TRISD   = 0;            // DAC0808 -> output
+    % [254]    DAC0808 = 128;          // DAC0808 -> 0 + offset
+    % [255]    ADCON0  = 0X01;         // ADC enabled on AN0
+    % [256]    ADCON1  = 0x0E;         // AN0 -> analogic
+    % [257]    ADCON2  = 0x01;         // Left justification, 0 Tad, 8 Tosc
 
-    % // Parameters initialization
-    % prev_mode       = MODE_NONE;            // previous mode selected: none
-    % sampling        = (int) (10000 / ((CCPR2H << 8) + CCPR2L)); // sampling frequency determined by the CCP2 value
-    % cutoff_max      = sampling*1000 >> 1;   // low/high pass filter max value determined by the sampling frequency
-    % filter          = F_MOV_AVG;            // filter selected: moving average
-    % mov_avg_coef    = F_MOV_AVG_MIN;        // moving average value: minimum
-    % low_cutoff      = F_LOW_PASS_MIN;       // low-pass cutoff value: minimum
-    % high_cutoff     = cutoff_max;           // high-pass cutoff value: maximum
-    % echo_delay      = F_ECHO_DEL_MIN;       // echo delay: minimum
-    % echoes          = F_ECHO_N_MIN;         // number of echoes: minimum
+
+
+
+
+    % [270]    init_SPI();             // SPI bus and peripherals initialization
+
+    % Ici il y aurait eu un intérêt à faire comme dans le projet de SLP : connecter les boutons à un I/O expander SPI qui déclencherait une interruption de priorité plus faible que l'interruption qui génère le signal. Dans ce cas, il aurait également fallu veiller à mettre des verrous sur les opérations de communication SPI pour qu'elles puissent se dérouler correctement sans interruption. Cette remarque s'applique particulièrement dans le cas ou un MCP4922 est utilisé plutôt qu'un DAC0808 puisque la communication entre le PIC et le DAC dans l'interruption principale se fait via un bus SPI.
+
+
 
     \subsection{Configuration de la conversion analogique-digitale}
+    \paragraph{}
+    La lecture du signal d'entrée
 
     % \paragraph{Conversion analogique-digitale (A/D conversion)}
     % ADCON0 permet de :
@@ -397,288 +412,296 @@
     Filtre à réponse impulsionnelle finie (FIR: finite impulse response) dont le coefficient $a = \frac{1}{N}$ et $b = 0$
 
 
-    \paragraph{Filtre echo}
-    Paramètre pour configurer le poids de l'echo par rapport au signal : le poids du signal est à 6 et l'echo p.e. à 2 -> rapport 3/4 - 1/4
-    Paramètre nr back ici à 300 -> je recule de 3000 échantillons => à une fréquence de 10kHz, si je recule de 3000 échantillons, on a un echo à 3/10ème de seconde
+%     \paragraph{Filtre echo}
+%     Paramètre pour configurer le poids de l'echo par rapport au signal : le poids du signal est à 6 et l'echo p.e. à 2 -> rapport 3/4 - 1/4
+%     Paramètre nr back ici à 300 -> je recule de 3000 échantillons => à une fréquence de 10kHz, si je recule de 3000 échantillons, on a un echo à 3/10ème de seconde
 
-    Attention à la taille du vecteur : c'est beaucoup plus simple de gérer le vecteur en C qu'en assembleur (cf projet précédent) mais il faut quand même regarder la taille de la mémoire dans la datasheet pour ne pas dépasser. Le prof a mis un max de 3600 car on a une mémoire de 4k. Le seul moyen d'allonger les temps d'echos est de jouer sur la fréquence d'échantillonnage
-
-
-    \newpage
-    \section{Tests}
-
-    \paragraph{}
-    Tout au long du développement, le programme a été testé avec la simulation Proteus et les différents outils à disposition. L'oscilloscope branché sur les différentes PIN a permis de vérifier la génération d'un signal en sortie des DAC et en sortie des filtres de Laplace mais aussi de s'assurer que la durée de traitement ne dépasse pas la durée de l'interruption grâce à la PIN activée durant le traitement du signal ou encore de débugger les communications via le bus SPI.
-
-    \paragraph{}
-    Une fois la programmation du filtre terminée, la sortie des filtres a été validée avec les analyses de Fourier et les analyses de signaux audio générées dans Proteus. Ce sont les résultats de ces tests qui sont présentés dans cette section. Ils ont été produits en changeant les paramètre d'initialisation du filtre avant la compilation du programme. Tous les tests réalisés se trouvent dans le code source et il suffit de décommenter le test souhaité pour le reproduire.
-
-    \paragraph{}
-    Pour les différents tests, les fréquences de coupures des filtres de Laplace en sortie des DAC on été réglées soit à \SI{16}{\kilo\hertz} soit à \SI{8}{\kilo\hertz} en fonction de la fréquence d'échantillonnage testée (ce paramètre est affiché sous le filtre dans le projet Proteus). Le fichier d'entrée a également été échantillonné à \SI{16}{\kilo\hertz} ou à \SI{8}{\kilo\hertz}, ce qui permet de se passer de filtre anti-repliement.
-
-    \paragraph{}
-    Tous les signaux utilisés pour les tests et tous les signaux générés par les tests se trouvent dans le dossier \emph{wav} du projet.
-
-
-    \subsection{Filtre par moyenne glissante}
-    \paragraph{}
-    Les tests du filtre par moyenne glissante ont été effectués sur l'audio \emph{drake\_30s\_delay\_1s\_8k.wav} pour les tests faits avec une fréquence d'échantillonnage de \SI{8}{\kilo\hertz} et \emph{drake\_30s\_delay\_1s\_16k.wav} pour une fréquence d'échantillonnage de \SI{16}{\kilo\hertz}. Le délai d'une seconde permet de laisser le temps au programme de s'initialiser.
-
-    \paragraph{}
-    Le filtre par moyenne possible implémente assez peu de combinaisons possibles de coefficient et de fréquence d'échantillonnage que pour pouvoir les tester toutes.
-
-    \paragraph{}
-    Que ce soit en \SI{16}{\kilo\hertz} ou en \SI{8}{\kilo\hertz}, les tests mettent en évidence que le filtre est d'autant plus filtrant que son coefficient est élevé. Plus le coefficient augment, plus le signal de sortie est atténué par rapport au signal d'entrée. Les fréquences du signal de sortie sont également de plus affaiblies à mesure que le coefficient du filtre augmente.
-
-    \paragraph{}
-    Les hautes fréquences sont par contre plus puissantes pour le signal de sortie que pour le signal d'entrée : il s'agit du bruit de quantification. Ce bruit n'est pas lié au filtre mais au traitement numérique d'un signal analogique : il apparaît également quand le signal lu est directement reporté sur la DAC.
-
-    \begin{figure}[H]
-        \centering
-        \includegraphics[width=.6\textwidth]{./images/spectrum_no_filter_8k.png}
-        \caption{Spectre du signal d'entrée et du signal d'entrée lu par le programme et reporté sur le DAC sans modification (8kHz)}
-    \end{figure}
-
-    \paragraph{}
-    Les fichiers audio produits permettent également d'entendre la dégradation progressive du signal : à mesure que le coefficient du filtre augmente, le son paraît de plus en plus étouffé. Les signaux produits sont enregistrés dans les fichiers :
-    \begin{itemize}
-        \item \emph{test\_mov\_avg\_2\_16k.wav} (filtre d'ordre 2 en \SI{16}{\kilo\hertz})
-        \item \emph{test\_mov\_avg\_4\_16k.wav} (filtre d'ordre 4 en \SI{16}{\kilo\hertz})
-        \item \emph{test\_mov\_avg\_8\_16k.wav} (filtre d'ordre 8 en \SI{16}{\kilo\hertz})
-        \item \emph{test\_mov\_avg\_2\_8k.wav} (filtre d'ordre 2 en \SI{8}{\kilo\hertz})
-        \item \emph{test\_mov\_avg\_4\_8k.wav} (filtre d'ordre 4 en \SI{8}{\kilo\hertz})
-        \item \emph{test\_mov\_avg\_8\_8k.wav} (filtre d'ordre 8 en \SI{8}{\kilo\hertz})
-    \end{itemize}
-
-    \subsubsection{Test : filtre d'ordre 2 (16kHz)}
-    \begin{figure}[H]
-        \centering
-        \begin{subfigure}[b]{\textwidth}
-            \centering
-            \includegraphics[width=.6\textwidth]{./images/spectrum_mov_avg_2_16k.png}
-            \caption{Analyse fréquentielle}
-        \end{subfigure}
-        \begin{subfigure}[b]{\textwidth}
-            \centering
-            \includegraphics[width=\textwidth]{./images/out_mov_avg_2_16k.png}
-            \caption{Analyse temporelle}
-        \end{subfigure}
-        \caption{Test du filtre par moyenne glissante d'ordre 2 (16kHz)}
-    \end{figure}
-
-    \subsubsection{Test : filtre d'ordre 4 (16kHz)}
-    \begin{figure}[H]
-        \centering
-        \begin{subfigure}[b]{\textwidth}
-            \centering
-            \includegraphics[width=.6\textwidth]{./images/spectrum_mov_avg_4_16k.png}
-            \caption{Analyse fréquentielle}
-        \end{subfigure}
-        \begin{subfigure}[b]{\textwidth}
-            \centering
-            \includegraphics[width=\textwidth]{./images/out_mov_avg_4_16k.png}
-            \caption{Analyse temporelle}
-        \end{subfigure}
-        \caption{Test du filtre par moyenne glissante d'ordre 4 (16kHz)}
-    \end{figure}
-
-    \subsubsection{Test : filtre d'ordre 8 (16kHz)}
-    \begin{figure}[H]
-        \centering
-        \begin{subfigure}[b]{\textwidth}
-            \centering
-            \includegraphics[width=.6\textwidth]{./images/spectrum_mov_avg_8_16k.png}
-            \caption{Analyse fréquentielle}
-        \end{subfigure}
-        \begin{subfigure}[b]{\textwidth}
-            \centering
-            \includegraphics[width=\textwidth]{./images/out_mov_avg_8_16k.png}
-            \caption{Analyse temporelle}
-        \end{subfigure}
-        \caption{Test du filtre par moyenne glissante d'ordre 8 (16kHz)}
-    \end{figure}
-
-    \subsubsection{Test : filtre d'ordre 2 (8kHz)}
-    \begin{figure}[H]
-        \centering
-        \begin{subfigure}[b]{\textwidth}
-            \centering
-            \includegraphics[width=.6\textwidth]{./images/spectrum_mov_avg_2_8k.png}
-            \caption{Analyse fréquentielle}
-        \end{subfigure}
-        \begin{subfigure}[b]{\textwidth}
-            \centering
-            \includegraphics[width=\textwidth]{./images/out_mov_avg_2_8k.png}
-            \caption{Analyse temporelle}
-        \end{subfigure}
-        \caption{Test du filtre par moyenne glissante d'ordre 2 (8kHz)}
-    \end{figure}
-
-    \subsubsection{Test : filtre d'ordre 4 (8kHz)}
-    \begin{figure}[H]
-        \centering
-        \begin{subfigure}[b]{\textwidth}
-            \centering
-            \includegraphics[width=.6\textwidth]{./images/spectrum_mov_avg_4_8k.png}
-            \caption{Analyse fréquentielle}
-        \end{subfigure}
-        \begin{subfigure}[b]{\textwidth}
-            \centering
-            \includegraphics[width=\textwidth]{./images/out_mov_avg_4_8k.png}
-            \caption{Analyse temporelle}
-        \end{subfigure}
-        \caption{Test du filtre par moyenne glissante d'ordre 4 (8kHz)}
-    \end{figure}
-
-    \subsubsection{Test : filtre d'ordre 8 (8kHz)}
-    \begin{figure}[H]
-        \centering
-        \begin{subfigure}[b]{\textwidth}
-            \centering
-            \includegraphics[width=.6\textwidth]{./images/spectrum_mov_avg_8_8k.png}
-            \caption{Analyse fréquentielle}
-        \end{subfigure}
-        \begin{subfigure}[b]{\textwidth}
-            \centering
-            \includegraphics[width=\textwidth]{./images/out_mov_avg_8_8k.png}
-            \caption{Analyse temporelle}
-        \end{subfigure}
-        \caption{Test du filtre par moyenne glissante d'ordre 8 (8kHz)}
-    \end{figure}
-
-
-    \subsection{Filtre passe-bas}
-
-
-    \subsection{Filtre passe-haut}
-
-
-    \subsection{Filtre écho}
-    \paragraph{}
-    Le filtre écho a été testé avec les fichiers \emph{angelou\_10s\_delay\_1s\_8k.wav} (pour une fréquence d'échantillonnage de \SI{8}{\kilo\hertz}) et \emph{angelou\_10s\_delay\_1s\_16k.wav} (pour \SI{16}{\kilo\hertz}). Le délai d'une seconde au début du fichier permet de laisser assez de temps au programme pour initialiser le filtre.
-
-    \subsubsection{Test: 1 écho, durée de 200ms (16kHz)}
-    \paragraph{}
-    Avec une fréquence d'échantillonnage de \SI{16}{\kilo\hertz}, le filtre écho peut fonctionner avec une durée maximale de \SI{200}{\milli\second}. L'audio produit permet d'entendre un léger écho (\emph{test\_echo\_1\_200ms\_16k.wav}).
-
-    \paragraph{}
-    La comparaison des signaux d'entrée et de sortie de la figure~\ref{fig:echo_16k} met en évidence l'apparition de cet écho (entouré en rouge). Cette figure vérifie également que l'écho apparaît bien \SI{200}{\milli\second} après le signal original: e.g. le deuxième écho mis en évidence sur la figure~\ref{fig:echo_16k_out} démarre à \SI{4.25}{\second}, répercutant le signal original qui démarre à \SI{4.05}{\second} (lignes oranges).
-
-    \begin{figure}[H]
-        \centering
-        \begin{subfigure}[b]{\textwidth}
-            \centering
-            \includegraphics[width=\textwidth]{./images/in_echo_16k.png}
-            \caption{Signal d'entrée}
-        \end{subfigure}
-        \begin{subfigure}[b]{\textwidth}
-            \centering
-            \includegraphics[width=\textwidth]{./images/out_echo_1_200ms_16k.png}
-            \caption{Signal de sortie}
-            \label{fig:echo_16k_out}
-        \end{subfigure}
-        \caption{Test du filtre écho : 1 écho, durée de 200ms (16kHz)}
-        \label{fig:echo_16k}
-    \end{figure}
-
-    \paragraph{}
-    L'analyse de Fourier des signaux d'entrée et de sortie montre des spectres similaires. À partie de \SI{8}{\kilo\hertz}, le spectre du signal de sortie s'éloigne du spectre du signal d'entrée à cause du bruit de quantification.
-
-    \begin{figure}[H]
-        \centering
-        \includegraphics[width=.6\textwidth]{./images/spectrum_echo_1_200ms_16k.png}
-        \caption{Test du filtre écho : spectre de 1 écho, durée de 200ms (16kHz)}
-    \end{figure}
-
-    \subsubsection{Test: 1 écho, durée de 400ms (8kHz)}
-    \paragraph{}
-    Le filtre écho a également été testé avec un écho de la durée maximale possible pour une fréquence d'échantillonnage de \SI{8}{\kilo\hertz}, i.e. \SI{400}{\milli\second}. L'audio de sortie (\emph{test\_echo\_1\_400ms\_8k.wav}) permet d'entendre clairement cet écho.
-
-    \paragraph{}
-    La comparaison des signaux d'entrée et de sortie met en évidence l'apparition de cet écho \SI{400}{\milli\second} après le signal original : e.g. le premier écho mis en évidence démarre à \SI{5.12}{\second} et répercute la portion du signal original qui débute à \SI{4.72}{\second} (lignes oranges).
-
-    \begin{figure}[H]
-        \centering
-        \begin{subfigure}[b]{\textwidth}
-            \centering
-            \includegraphics[width=\textwidth]{./images/in_echo_8k.png}
-            \caption{Signal d'entrée}
-        \end{subfigure}
-        \begin{subfigure}[b]{\textwidth}
-            \centering
-            \includegraphics[width=\textwidth]{./images/out_echo_1_400ms_8k.png}
-            \caption{Signal de sortie}
-            \label{fig:echo_8k_out}
-        \end{subfigure}
-        \caption{Test du filtre écho : 1 écho, durée de 400ms (8kHz)}
-    \end{figure}
-
-    \paragraph{}
-    L'analyse de Fourier est similaire à la précédente : les spectres des signaux d'entrée et de sortie sont identiques jusqu'à \SI{4}{\kilo\hertz} où ils commencent à s'écarter l'un de l'autre à cause du bruit de quantification.
-
-    \begin{figure}[H]
-        \centering
-        \includegraphics[width=.6\textwidth]{./images/spectrum_echo_1_400ms_8k.png}
-        \caption{Test du filtre écho : spectre de 1 écho, durée de 400ms (8kHz)}
-    \end{figure}
-
-    \subsubsection{Test: 1 écho, durée de 200ms (8kHz)}
-    \paragraph{}
-    Le filtre écho testé avec un écho d'une durée de \SI{200}{\milli\second} avec une fréquence d'échantillonnage de \SI{8}{\kilo\hertz} donne un résultat similaire au premier test. L'audio de sortie \emph{test\_echo\_1\_200ms\_8k.wav} permet d'entendre le même écho malgré la qualité d'audio moindre. Le signal de sortie est similaire : les échos apparaissent aux mêmes endroits, décalés de \SI{200}{\milli\second} par rapport au signal original.
-    \begin{figure}[H]
-        \centering
-        \includegraphics[width=\textwidth]{./images/out_echo_1_200ms_8k.png}
-        \caption{Test du filtre écho : output de 1 écho, durée de 200ms (8kHz)}
-    \end{figure}
-
-    \subsubsection{Test: 1 écho, durée de 100ms (8kHz)}
-    \paragraph{}
-    Avec une durée de \SI{100}{\milli\second}, l'écho n'est presque plus perceptible (\emph{test\_echo\_1\_100ms\_8k.wav}). Les échos générés sont bien visibles sur l'analyse du signal de sortie, décalés de \SI{100}{\milli\second} par rapport au signal original.
-    \begin{figure}[H]
-        \centering
-        \includegraphics[width=\textwidth]{./images/out_echo_1_100ms_8k.png}
-        \caption{Test du filtre écho : output de 1 écho, durée de 100ms (8kHz)}
-    \end{figure}
-
-    \subsubsection{Test: 2 échos, durée de 400ms (8kHz)}
-    \paragraph{}
-    Les échos multiples ont été testés avec une fréquence d'échantillonnage de \SI{8}{\kilo\hertz} puisqu'elle autorise une durée deux fois plus grande qu'à \SI{16}{\kilo\hertz}. La durée est réglée au maximum (\SI{400}{\milli\second}) pour pouvoir distinguer au mieux le signal original et ses échos.
-
-    \paragraph{}
-    Comme avec un seul écho, le signal original apparaît affaibli. Les échos sont moins marqués mais apparaissent bien et surtout sont bien distinguables à l'écoute (\emph{test\_echo\_2\_8k.wav}).
-    \begin{figure}[H]
-        \centering
-        \includegraphics[width=\textwidth]{./images/out_echo_2_8k.png}
-        \caption{Test du filtre écho : output de 2 échos, durée de 400ms (8kHz)}
-    \end{figure}
-
-    \subsubsection{Test: 3 échos, durée de 400ms (8kHz)}
-    \paragraph{}
-    Avec trois échos, le signal original est encore plus atténué et les échos sont plus fondus. Ils sont maintenant difficilement distinguables à l'écoute (\emph{test\_echo\_3\_8k.wav}).
-
-    \begin{figure}[H]
-        \centering
-        \includegraphics[width=\textwidth]{./images/out_echo_3_8k.png}
-        \caption{Test du filtre écho : output de 3 échos, durée de 400ms (8kHz)}
-    \end{figure}
-
-
-    \newpage
-    \section{Difficultés rencontrées}
-    % Le calcul des mises à échelle pour s'assurer qu'il n'y a pas de dépassement de valeurs.
-
-    % concevoir un programme qui fonctionne bien en simulation
-
-    % proposer à la fois un menu assez riche et économiser l'espace pour le réserver pour les buffers: il n'y avait pas durée d'écho minimale précisée donc ça va mais j'aurais clairement pu faire mieux (aller jusqu'à 450 ms pour du 8k)
-
-    % \section{Configuration}
+%     Attention à la taille du vecteur : c'est beaucoup plus simple de gérer le vecteur en C qu'en assembleur (cf projet précédent) mais il faut quand même regarder la taille de la mémoire dans la datasheet pour ne pas dépasser. Le prof a mis un max de 3600 car on a une mémoire de 4k. Le seul moyen d'allonger les temps d'echos est de jouer sur la fréquence d'échantillonnage
 
 
 
 
+    % Fréquence d'échantillonnage, fréquence utile du signal et fréquence de coupure du filtre de Laplace (entre max Fs/2 et min la fréquence du signal: à la moitié de la fréquence d'échantillonnage, c'est ok pour toutes les fréquences de signaux mais pour mieux lisser, on peut jouer avec la fréquence de coupure du filtre pour la rapprocher de la fréquence du signal, d'autant plus qu'ici on a un filtre de Laplace, d'ordre 1, i.e. un simple RC qui a donc une faible sélectivité, i.e. la coupure n'est pas nette)
+    % Remarque : le filtre de Laplace déphase le signal de sortie d'autant plus qu'il est plus filtrant.
 
-    % 1/03 interruptions prioritisées
-    Possible amélioration mais complique beaucoup la programmation. En plus, en 16kHz, on est vraiment à la limite des possibilités du processeur -> beaucoup d'interruptions en haute priorité -> les entrées et sorties risquent d'être extrêmement
+%     \newpage
+%     \section{Tests}
+
+%     \paragraph{}
+%     Tout au long du développement, le programme a été testé avec la simulation Proteus et les différents outils à disposition. L'oscilloscope branché sur les différentes PIN a permis de vérifier la génération d'un signal en sortie des DAC et en sortie des filtres de Laplace mais aussi de s'assurer que la durée de traitement ne dépasse pas la durée de l'interruption grâce à la PIN activée durant le traitement du signal ou encore de débugger les communications via le bus SPI.
+
+%     \paragraph{}
+%     Une fois la programmation du filtre terminée, la sortie des filtres a été validée avec les analyses de Fourier et les analyses de signaux audio générées dans Proteus. Ce sont les résultats de ces tests qui sont présentés dans cette section. Ils ont été produits en changeant les paramètre d'initialisation du filtre avant la compilation du programme. Tous les tests réalisés se trouvent dans le code source et il suffit de décommenter le test souhaité pour le reproduire.
+
+%     \paragraph{}
+%     Pour les différents tests, les fréquences de coupures des filtres de Laplace en sortie des DAC on été réglées soit à \SI{16}{\kilo\hertz} soit à \SI{8}{\kilo\hertz} en fonction de la fréquence d'échantillonnage testée (ce paramètre est affiché sous le filtre dans le projet Proteus). Le fichier d'entrée a également été échantillonné à \SI{16}{\kilo\hertz} ou à \SI{8}{\kilo\hertz}, ce qui permet de se passer de filtre anti-repliement.
+
+%     \paragraph{}
+%     Tous les signaux utilisés pour les tests et tous les signaux générés par les tests se trouvent dans le dossier \emph{wav} du projet.
+
+
+%     \subsection{Filtre par moyenne glissante}
+%     \paragraph{}
+%     Les tests du filtre par moyenne glissante ont été effectués sur l'audio \emph{drake\_30s\_delay\_1s\_8k.wav} pour les tests faits avec une fréquence d'échantillonnage de \SI{8}{\kilo\hertz} et \emph{drake\_30s\_delay\_1s\_16k.wav} pour une fréquence d'échantillonnage de \SI{16}{\kilo\hertz}. Le délai d'une seconde permet de laisser le temps au programme de s'initialiser.
+
+%     \paragraph{}
+%     Le filtre par moyenne possible implémente assez peu de combinaisons possibles de coefficient et de fréquence d'échantillonnage que pour pouvoir les tester toutes.
+
+%     \paragraph{}
+%     Que ce soit en \SI{16}{\kilo\hertz} ou en \SI{8}{\kilo\hertz}, les tests mettent en évidence que le filtre est d'autant plus filtrant que son coefficient est élevé. Plus le coefficient augment, plus le signal de sortie est atténué par rapport au signal d'entrée. Les fréquences du signal de sortie sont également de plus affaiblies à mesure que le coefficient du filtre augmente.
+
+%     \paragraph{}
+%     Les hautes fréquences sont par contre plus puissantes pour le signal de sortie que pour le signal d'entrée : il s'agit du bruit de quantification. Ce bruit n'est pas lié au filtre mais au traitement numérique d'un signal analogique : il apparaît également quand le signal lu est directement reporté sur la DAC.
+
+%     \begin{figure}[H]
+%         \centering
+%         \includegraphics[width=.6\textwidth]{./images/spectrum_no_filter_8k.png}
+%         \caption{Spectre du signal d'entrée et du signal d'entrée lu par le programme et reporté sur le DAC sans modification (8kHz)}
+%     \end{figure}
+
+%     \paragraph{}
+%     Les fichiers audio produits permettent également d'entendre la dégradation progressive du signal : à mesure que le coefficient du filtre augmente, le son paraît de plus en plus étouffé. Les signaux produits sont enregistrés dans les fichiers :
+%     \begin{itemize}
+%         \item \emph{test\_mov\_avg\_2\_16k.wav} (filtre d'ordre 2 en \SI{16}{\kilo\hertz})
+%         \item \emph{test\_mov\_avg\_4\_16k.wav} (filtre d'ordre 4 en \SI{16}{\kilo\hertz})
+%         \item \emph{test\_mov\_avg\_8\_16k.wav} (filtre d'ordre 8 en \SI{16}{\kilo\hertz})
+%         \item \emph{test\_mov\_avg\_2\_8k.wav} (filtre d'ordre 2 en \SI{8}{\kilo\hertz})
+%         \item \emph{test\_mov\_avg\_4\_8k.wav} (filtre d'ordre 4 en \SI{8}{\kilo\hertz})
+%         \item \emph{test\_mov\_avg\_8\_8k.wav} (filtre d'ordre 8 en \SI{8}{\kilo\hertz})
+%     \end{itemize}
+
+%     \subsubsection{Test : filtre d'ordre 2 (16kHz)}
+%     \begin{figure}[H]
+%         \centering
+%         \begin{subfigure}[b]{\textwidth}
+%             \centering
+%             \includegraphics[width=.6\textwidth]{./images/spectrum_mov_avg_2_16k.png}
+%             \caption{Analyse fréquentielle}
+%         \end{subfigure}
+%         \begin{subfigure}[b]{\textwidth}
+%             \centering
+%             \includegraphics[width=\textwidth]{./images/out_mov_avg_2_16k.png}
+%             \caption{Analyse temporelle}
+%         \end{subfigure}
+%         \caption{Test du filtre par moyenne glissante d'ordre 2 (16kHz)}
+%     \end{figure}
+
+%     \subsubsection{Test : filtre d'ordre 4 (16kHz)}
+%     \begin{figure}[H]
+%         \centering
+%         \begin{subfigure}[b]{\textwidth}
+%             \centering
+%             \includegraphics[width=.6\textwidth]{./images/spectrum_mov_avg_4_16k.png}
+%             \caption{Analyse fréquentielle}
+%         \end{subfigure}
+%         \begin{subfigure}[b]{\textwidth}
+%             \centering
+%             \includegraphics[width=\textwidth]{./images/out_mov_avg_4_16k.png}
+%             \caption{Analyse temporelle}
+%         \end{subfigure}
+%         \caption{Test du filtre par moyenne glissante d'ordre 4 (16kHz)}
+%     \end{figure}
+
+%     \subsubsection{Test : filtre d'ordre 8 (16kHz)}
+%     \begin{figure}[H]
+%         \centering
+%         \begin{subfigure}[b]{\textwidth}
+%             \centering
+%             \includegraphics[width=.6\textwidth]{./images/spectrum_mov_avg_8_16k.png}
+%             \caption{Analyse fréquentielle}
+%         \end{subfigure}
+%         \begin{subfigure}[b]{\textwidth}
+%             \centering
+%             \includegraphics[width=\textwidth]{./images/out_mov_avg_8_16k.png}
+%             \caption{Analyse temporelle}
+%         \end{subfigure}
+%         \caption{Test du filtre par moyenne glissante d'ordre 8 (16kHz)}
+%     \end{figure}
+
+%     \subsubsection{Test : filtre d'ordre 2 (8kHz)}
+%     \begin{figure}[H]
+%         \centering
+%         \begin{subfigure}[b]{\textwidth}
+%             \centering
+%             \includegraphics[width=.6\textwidth]{./images/spectrum_mov_avg_2_8k.png}
+%             \caption{Analyse fréquentielle}
+%         \end{subfigure}
+%         \begin{subfigure}[b]{\textwidth}
+%             \centering
+%             \includegraphics[width=\textwidth]{./images/out_mov_avg_2_8k.png}
+%             \caption{Analyse temporelle}
+%         \end{subfigure}
+%         \caption{Test du filtre par moyenne glissante d'ordre 2 (8kHz)}
+%     \end{figure}
+
+%     \subsubsection{Test : filtre d'ordre 4 (8kHz)}
+%     \begin{figure}[H]
+%         \centering
+%         \begin{subfigure}[b]{\textwidth}
+%             \centering
+%             \includegraphics[width=.6\textwidth]{./images/spectrum_mov_avg_4_8k.png}
+%             \caption{Analyse fréquentielle}
+%         \end{subfigure}
+%         \begin{subfigure}[b]{\textwidth}
+%             \centering
+%             \includegraphics[width=\textwidth]{./images/out_mov_avg_4_8k.png}
+%             \caption{Analyse temporelle}
+%         \end{subfigure}
+%         \caption{Test du filtre par moyenne glissante d'ordre 4 (8kHz)}
+%     \end{figure}
+
+%     \subsubsection{Test : filtre d'ordre 8 (8kHz)}
+%     \begin{figure}[H]
+%         \centering
+%         \begin{subfigure}[b]{\textwidth}
+%             \centering
+%             \includegraphics[width=.6\textwidth]{./images/spectrum_mov_avg_8_8k.png}
+%             \caption{Analyse fréquentielle}
+%         \end{subfigure}
+%         \begin{subfigure}[b]{\textwidth}
+%             \centering
+%             \includegraphics[width=\textwidth]{./images/out_mov_avg_8_8k.png}
+%             \caption{Analyse temporelle}
+%         \end{subfigure}
+%         \caption{Test du filtre par moyenne glissante d'ordre 8 (8kHz)}
+%     \end{figure}
+
+
+%     \subsection{Filtre passe-bas}
+%     Le test avec les valeurs limites permet de vérifier que c'est bien un filtre passe-bas : à 0, ne doit rien laisser passer et au max doit tout laisser passer.
+
+
+%     \subsection{Filtre passe-haut}
+%     Comme pour le passe-bas : test avec les valeurs limites.
+%     A 0, on laisse bien passer tout le signal.
+
+
+%     \subsection{Filtre écho}
+%     \paragraph{}
+%     Le filtre écho a été testé avec les fichiers \emph{angelou\_10s\_delay\_1s\_8k.wav} (pour une fréquence d'échantillonnage de \SI{8}{\kilo\hertz}) et \emph{angelou\_10s\_delay\_1s\_16k.wav} (pour \SI{16}{\kilo\hertz}). Le délai d'une seconde au début du fichier permet de laisser assez de temps au programme pour initialiser le filtre.
+
+%     \subsubsection{Test: 1 écho, durée de 200ms (16kHz)}
+%     \paragraph{}
+%     Avec une fréquence d'échantillonnage de \SI{16}{\kilo\hertz}, le filtre écho peut fonctionner avec une durée maximale de \SI{200}{\milli\second}. L'audio produit permet d'entendre un léger écho (\emph{test\_echo\_1\_200ms\_16k.wav}).
+
+%     \paragraph{}
+%     La comparaison des signaux d'entrée et de sortie de la figure~\ref{fig:echo_16k} met en évidence l'apparition de cet écho (entouré en rouge). Cette figure vérifie également que l'écho apparaît bien \SI{200}{\milli\second} après le signal original: e.g. le deuxième écho mis en évidence sur la figure~\ref{fig:echo_16k_out} démarre à \SI{4.25}{\second}, répercutant le signal original qui démarre à \SI{4.05}{\second} (lignes oranges).
+
+%     \begin{figure}[H]
+%         \centering
+%         \begin{subfigure}[b]{\textwidth}
+%             \centering
+%             \includegraphics[width=\textwidth]{./images/in_echo_16k.png}
+%             \caption{Signal d'entrée}
+%         \end{subfigure}
+%         \begin{subfigure}[b]{\textwidth}
+%             \centering
+%             \includegraphics[width=\textwidth]{./images/out_echo_1_200ms_16k.png}
+%             \caption{Signal de sortie}
+%             \label{fig:echo_16k_out}
+%         \end{subfigure}
+%         \caption{Test du filtre écho : 1 écho, durée de 200ms (16kHz)}
+%         \label{fig:echo_16k}
+%     \end{figure}
+
+%     \paragraph{}
+%     L'analyse de Fourier des signaux d'entrée et de sortie montre des spectres similaires. À partie de \SI{8}{\kilo\hertz}, le spectre du signal de sortie s'éloigne du spectre du signal d'entrée à cause du bruit de quantification.
+
+%     \begin{figure}[H]
+%         \centering
+%         \includegraphics[width=.6\textwidth]{./images/spectrum_echo_1_200ms_16k.png}
+%         \caption{Test du filtre écho : spectre de 1 écho, durée de 200ms (16kHz)}
+%     \end{figure}
+
+%     \subsubsection{Test: 1 écho, durée de 400ms (8kHz)}
+%     \paragraph{}
+%     Le filtre écho a également été testé avec un écho de la durée maximale possible pour une fréquence d'échantillonnage de \SI{8}{\kilo\hertz}, i.e. \SI{400}{\milli\second}. L'audio de sortie (\emph{test\_echo\_1\_400ms\_8k.wav}) permet d'entendre clairement cet écho.
+
+%     \paragraph{}
+%     La comparaison des signaux d'entrée et de sortie met en évidence l'apparition de cet écho \SI{400}{\milli\second} après le signal original : e.g. le premier écho mis en évidence démarre à \SI{5.12}{\second} et répercute la portion du signal original qui débute à \SI{4.72}{\second} (lignes oranges).
+
+%     \begin{figure}[H]
+%         \centering
+%         \begin{subfigure}[b]{\textwidth}
+%             \centering
+%             \includegraphics[width=\textwidth]{./images/in_echo_8k.png}
+%             \caption{Signal d'entrée}
+%         \end{subfigure}
+%         \begin{subfigure}[b]{\textwidth}
+%             \centering
+%             \includegraphics[width=\textwidth]{./images/out_echo_1_400ms_8k.png}
+%             \caption{Signal de sortie}
+%             \label{fig:echo_8k_out}
+%         \end{subfigure}
+%         \caption{Test du filtre écho : 1 écho, durée de 400ms (8kHz)}
+%     \end{figure}
+
+%     \paragraph{}
+%     L'analyse de Fourier est similaire à la précédente : les spectres des signaux d'entrée et de sortie sont identiques jusqu'à \SI{4}{\kilo\hertz} où ils commencent à s'écarter l'un de l'autre à cause du bruit de quantification.
+
+%     \begin{figure}[H]
+%         \centering
+%         \includegraphics[width=.6\textwidth]{./images/spectrum_echo_1_400ms_8k.png}
+%         \caption{Test du filtre écho : spectre de 1 écho, durée de 400ms (8kHz)}
+%     \end{figure}
+
+%     \subsubsection{Test: 1 écho, durée de 200ms (8kHz)}
+%     \paragraph{}
+%     Le filtre écho testé avec un écho d'une durée de \SI{200}{\milli\second} avec une fréquence d'échantillonnage de \SI{8}{\kilo\hertz} donne un résultat similaire au premier test. L'audio de sortie \emph{test\_echo\_1\_200ms\_8k.wav} permet d'entendre le même écho malgré la qualité d'audio moindre. Le signal de sortie est similaire : les échos apparaissent aux mêmes endroits, décalés de \SI{200}{\milli\second} par rapport au signal original.
+%     \begin{figure}[H]
+%         \centering
+%         \includegraphics[width=\textwidth]{./images/out_echo_1_200ms_8k.png}
+%         \caption{Test du filtre écho : output de 1 écho, durée de 200ms (8kHz)}
+%     \end{figure}
+
+%     \subsubsection{Test: 1 écho, durée de 100ms (8kHz)}
+%     \paragraph{}
+%     Avec une durée de \SI{100}{\milli\second}, l'écho n'est presque plus perceptible (\emph{test\_echo\_1\_100ms\_8k.wav}). Les échos générés sont bien visibles sur l'analyse du signal de sortie, décalés de \SI{100}{\milli\second} par rapport au signal original.
+%     \begin{figure}[H]
+%         \centering
+%         \includegraphics[width=\textwidth]{./images/out_echo_1_100ms_8k.png}
+%         \caption{Test du filtre écho : output de 1 écho, durée de 100ms (8kHz)}
+%     \end{figure}
+
+%     \subsubsection{Test: 2 échos, durée de 400ms (8kHz)}
+%     \paragraph{}
+%     Les échos multiples ont été testés avec une fréquence d'échantillonnage de \SI{8}{\kilo\hertz} puisqu'elle autorise une durée deux fois plus grande qu'à \SI{16}{\kilo\hertz}. La durée est réglée au maximum (\SI{400}{\milli\second}) pour pouvoir distinguer au mieux le signal original et ses échos.
+
+%     \paragraph{}
+%     Comme avec un seul écho, le signal original apparaît affaibli. Les échos sont moins marqués mais apparaissent bien et surtout sont bien distinguables à l'écoute (\emph{test\_echo\_2\_8k.wav}).
+%     \begin{figure}[H]
+%         \centering
+%         \includegraphics[width=\textwidth]{./images/out_echo_2_8k.png}
+%         \caption{Test du filtre écho : output de 2 échos, durée de 400ms (8kHz)}
+%     \end{figure}
+
+%     \subsubsection{Test: 3 échos, durée de 400ms (8kHz)}
+%     \paragraph{}
+%     Avec trois échos, le signal original est encore plus atténué et les échos sont plus fondus. Ils sont maintenant difficilement distinguables à l'écoute (\emph{test\_echo\_3\_8k.wav}).
+
+%     \begin{figure}[H]
+%         \centering
+%         \includegraphics[width=\textwidth]{./images/out_echo_3_8k.png}
+%         \caption{Test du filtre écho : output de 3 échos, durée de 400ms (8kHz)}
+%     \end{figure}
+
+
+%     \newpage
+%     \section{Difficultés rencontrées}
+%     % Le calcul des mises à échelle pour s'assurer qu'il n'y a pas de dépassement de valeurs.
+
+%     % concevoir un programme qui fonctionne bien en simulation
+
+%     % proposer à la fois un menu assez riche et économiser l'espace pour le réserver pour les buffers: il n'y avait pas durée d'écho minimale précisée donc ça va mais j'aurais clairement pu faire mieux (aller jusqu'à 450 ms pour du 8k)
+
+%     % \section{Configuration}
+
+
+
+
+
+%     % 1/03 interruptions prioritisées
+%     Possible amélioration mais complique beaucoup la programmation. En plus, en 16kHz, on est vraiment à la limite des possibilités du processeur -> beaucoup d'interruptions en haute priorité -> les entrées et sorties risquent d'être extrêmement
 
 
 
