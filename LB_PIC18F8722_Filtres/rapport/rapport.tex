@@ -219,7 +219,7 @@
     La fréquence d'échantillonnage est implémentée par le programme en déclenchant une interruption à un intervalle déterminé : toutes les \SI{125}{\micro\second} pour du \SI{8}{\kilo\hertz} ou toutes les \SI{62.5}{\micro\second} pour du \SI{16}{\kilo\hertz}. La configuration de l'interruption est détaillée à la section~\ref{section:interruption}.
 
 
-    \newpage
+
     \section{Configuration du PIC}
     \label{section:configuration}
 
@@ -272,186 +272,80 @@
     [269]    PIR2bits.CCP2IF = 0;    // CCP2 interrupt flag cleared
     \end{verbatimtab}
 
-
-    % // PIC configuration
-    % [250]    TRISE   = 0xFF;         // PORTE (menu buttons) -> input
-    % [251]    TRISGbits.TRISG0 = 0;   // TICK -> output
-    % [252]    TICK    = 0;            // TICK -> 0
-    % [253]    TRISD   = 0;            // DAC0808 -> output
-    % [254]    DAC0808 = 128;          // DAC0808 -> 0 + offset
-    % [255]    ADCON0  = 0X01;         // ADC enabled on AN0
-    % [256]    ADCON1  = 0x0E;         // AN0 -> analogic
-    % [257]    ADCON2  = 0x01;         // Left justification, 0 Tad, 8 Tosc
-
-
-
-
-
-    % [270]    init_SPI();             // SPI bus and peripherals initialization
-
-    % Ici il y aurait eu un intérêt à faire comme dans le projet de SLP : connecter les boutons à un I/O expander SPI qui déclencherait une interruption de priorité plus faible que l'interruption qui génère le signal. Dans ce cas, il aurait également fallu veiller à mettre des verrous sur les opérations de communication SPI pour qu'elles puissent se dérouler correctement sans interruption. Cette remarque s'applique particulièrement dans le cas ou un MCP4922 est utilisé plutôt qu'un DAC0808 puisque la communication entre le PIC et le DAC dans l'interruption principale se fait via un bus SPI.
-
-
-
-    \subsection{Configuration de la conversion analogique-digitale}
+    \subsection{Conversion analogique-digitale}
     \paragraph{}
-    La lecture du signal d'entrée
+    La conversion analogique digitale est activée par le registre \texttt{ADCON0} qui sélectionne également l'entrée analogique au convertisseur : la canal 0. Le registre \texttt{ADCON1} configure la PIN AN0 en analogique (le minimum nécessaire) et garde les tensions de référence par défaut : $A_{VDD}$ et $A_{VSS}$ (0 et \SI{5}{\volt}).
+    \begin{verbatimtab}
+    [255]    ADCON0  = 0X01;         // ADC enabled on AN0
+    [256]    ADCON1  = 0x0E;         // AN0 -> analogic
+    [257]    ADCON2  = 0x01;         // Left justification, 0 Tad, Fosc/8
+    \end{verbatimtab}
 
-    % \paragraph{Conversion analogique-digitale (A/D conversion)}
-    % ADCON0 permet de :
-    % - activer la conversion (bit ADON)
-    % - vérifier quand la conversion est faite (bit GO/DONE)
-    % - sélectionner l'entrée analogique liée à l'ADC
+    \paragraph{}
+    Le registre \texttt{ADCON2} sélectionne la justification à gauche du résultat de la conversion dans les registres \texttt{ADRESH} et \texttt{ADRESL} : le programme travaille en 8bits et ne conserve donc que les 8 bits de poids forts lus dans le registre \texttt{ADRESH}.
 
-    % ADCON1 :
-    % permet de
-    % - configurer les entrées en analogique ou digital (TOR)
-    % Par défaut, tout est analogique. Ici on sera en 1101 (AN0 AN1), éventuellement 1011 (de AN0-3, AN2-3 étant des PIN de tension de ref) -> attention aux PIN en TOR dont on a besoin
-    % - configurer les tensions de référence du module ADC et d'où elles viennent
-    % Pour le programme, on travaille en mode 0 (mode par défaut), i.e. tensions de référence sur VDD et VSS (entre 0 et 5V)
+    \paragraph{}
+    Le registre \texttt{ADCON2} permet aussi de définir le temps d'acquisition et la fréquence de conversion. Le temps d'acquisition est configuré à 0 $T_{AD}$ car les conversions sont effectuées selon la fréquence des interruptions (maximum à \SI{16}{\kilo\hertz}) : il se sera donc toujours passé assez de temps entre les conversions. La fréquence de conversion est choisie en fonction de la fréquence de l'oscillateur et du type de PIC conformément à la table 21-1 (\emph{TAD vs. DEVICE OPERATING FREQUENCIES} de la datasheet. Elle est de 8 $T_{OSC}$ pour une fréquence d'oscillateur de \SI{10}{\mega\hertz} en respectant la recommendation de la datasheet de choisir le plus petit temps supérieur au minimum requis.
 
-    % ADCON2
-    % gère le fonctionnement technique du module ADC, dont
-    % - sa justification à droite ou à gauche (bit ADFM)
-    % - la configuration du temps d'acquisition (ACQT<2:0>)
-    % - la configuration de la fréquence de conversion, dérivée par rapport à la fréquence de l'oscillateur (ADCS<2:0>)
+    \subsection{Bus SPI et périphériques}
+    \paragraph{}
+    Le bus SPI et les périphériques qui y sont associés sont initialisés par la fonction \texttt{init\_SPI()} du fichier \emph{SPI.c}. Cette fonction est reprise de la librairie de gestion de la communication d'un PIC avec un LCD fournie pour les projets précédents.
 
-    % ADRESH et ADRESL
-    % contiennent le résultat de la conversion
+    \subsection{I/O}
+    \paragraph{}
+    Les boutons de gestion du menu sont connectés directement au PORTE di PIC. Le registre TRISE est donc configuré en input.
+    \begin{verbatimtab}
+    [250]    TRISE   = 0xFF;         // PORTE (menu buttons) -> input
+    \end{verbatimtab}
 
+    \paragraph{}
+    Le projet aurait pu implémenter une lecture des entrées via le bus SPI et une interruption de faible priorité. Ce n'est pas le cas car le programme principal utilise déjà le bus SPI pour communiquer avec le LCD et les communications entreraient en conflit.
 
-    % 1 Entrées analogiques ou digitales ? -< configuration de ADCON1
+    \paragraph{}
+    La PIn permettant de vérifier le temps d'exécution de l'interruption est configurée en output et initialisée à 0.
+    \begin{verbatimtab}
+    [251]    TRISGbits.TRISG0 = 0;   // TICK -> output
+    [252]    TICK    = 0;            // TICK -> 0
+    \end{verbatimtab}
 
-    % 2 Tensions de référence ? -> 00
-
-    % 3 Temps de conversion ? il faut 12 temps TAD avant de finir la conversion et d'avoir le déclenchement du GO/DONE
-    % valeur min de TAD = 0,7us
-    % valeur de TAD fixé par le quartz et les bits ADCS<2:0> de l'ADCON2
-
-    % à 10MHz HSPLL, 1 tosc = 0,1us
-    % puisqu'il faut min 0,7us => il faut choisir le 8tosc (001)
-
-    % => le temps de conversion va durer 12*8TOSC = 0,96us
-    % => on peut tenir une fréquence théorique max de 100kHz
-    % (limite théorique mais en pratique on doit aller moins vite pour garder de la puissance processeur pour autre chose)
-
-    % 4 Temps d'acquisition ? ACQT<2:0>
-    % typiquement, dans un système qui ne fait pas que de la conversion, on le laisse à 0 parce que le temps de conversion est là en ayant fait autre chose avant.
-
-    % 5 Justification de résultat ? ADFM
-    % 8 bits -> à gauche et on utilise que adresh
-    % 10 bits -> à droite et on utilise adresh et l
-
-    % 6 Choix du canal de conversion ? ADCON0
-    % Ici avec Proteus on n'est pas limité par un hardware déjà soudé
-
-    % 7 Alimentation du CAN ?
-    % Dernière étape : activer l'ADC avec le bit ADON
-
-    % Utilisation : on met 1 dans le GO/DONE et on attend que ça saute pour avoir le résultat
-
-    %=================================================
+    \paragraph{}
+    Enfin, bien que le projet permette de générer un signal via le convertisseur digital-analogique MCP4922, le DAC0808 n'a pas été supprimé car tous les tests présentés ont été fait avec ce DAC.
+    \begin{verbatimtab}
+    [253]    TRISD   = 0;            // DAC0808 -> output
+    [254]    DAC0808 = 128;          // DAC0808 -> 0 + offset
+    \end{verbatimtab}
 
 
 
+    \section{Tests}
+    \paragraph{}
+    Tout au long du développement, le programme a été testé avec la simulation Proteus et les différents outils à disposition. L'oscilloscope branché sur les différentes PIN a permis de vérifier la génération d'un signal en sortie des DAC et en sortie des filtres de Laplace mais aussi de s'assurer que la durée de traitement ne dépasse pas la durée de l'interruption grâce à la PIN activée durant le traitement du signal ou encore de débugger les communications via le bus SPI.
+
+    \paragraph{}
+    Une fois la programmation du filtre terminée, la sortie des filtres a été validée avec les analyses de Fourier et les analyses de signaux audio générées dans Proteus. Ce sont les résultats de ces tests qui sont présentés dans cette section. Ils ont été produits en changeant les paramètre d'initialisation du filtre avant la compilation du programme. Tous les tests réalisés se trouvent dans le code source et il suffit de décommenter le test souhaité pour le reproduire.
+
+    \paragraph{}
+    Pour les différents tests, les fréquences de coupures des filtres de Laplace en sortie des DAC on été réglées soit à \SI{8}{\kilo\hertz} soit à \SI{4}{\kilo\hertz} en fonction de la fréquence d'échantillonnage testée (ce paramètre est affiché sous le filtre dans le projet Proteus).
+
+    \paragraph{}
+    Tous les signaux utilisés pour les tests et tous les signaux générés par les tests se trouvent dans le dossier \emph{wav} du projet.
 
 
+    \subsection{Filtre par moyenne glissante}
+    \paragraph{}
+    Les tests du filtre par moyenne glissante ont été effectués sur l'audio \emph{drake\_30s\_delay\_1s\_8k.wav} pour les tests faits avec une fréquence d'échantillonnage de \SI{8}{\kilo\hertz} et \emph{drake\_30s\_delay\_1s\_16k.wav} pour une fréquence d'échantillonnage de \SI{16}{\kilo\hertz}. Le délai d'une seconde permet de laisser le temps au programme de s'initialiser.
 
+    \paragraph{}
+    Le filtre par moyenne glissante implémente assez peu de combinaisons possibles de coefficient et de fréquence d'échantillonnage que pour pouvoir les tester toutes.
 
+    \paragraph{}
+    Que ce soit en \SI{16}{\kilo\hertz} ou en \SI{8}{\kilo\hertz}, les tests mettent en évidence que le filtre est d'autant plus filtrant que son coefficient est élevé. Plus le coefficient augmente, plus le signal de sortie est atténué par rapport au signal d'entrée. Les fréquences du signal de sortie sont également de plus affaiblies à mesure que le coefficient du filtre augmente.
 
+    \paragraph{}
+    Les hautes fréquences sont par contre plus puissantes pour le signal de sortie que pour le signal d'entrée : il s'agit du bruit de quantification. Ce bruit n'est pas lié au filtre mais au traitement numérique d'un signal analogique : il apparaît également quand le signal lu est directement reporté sur la DAC.
 
-    % La description de la configuration du PIC utilisée
-    % DAC0808 banché directement sur le port D plutôt que via un bus de communication (SPI ou I2C) -> plus rapide -> fréquence d'échantillonnage + élevée (50 kHz au lieu de 20kHz via SPI)
-
-    % \paragraph{MCP4922}
-    % Dual 12-Bit Voltage Output DAC -> intéressant si on veut passer le programme en stereo même si permet une fréquence de signal plus petit qu'un DAC connecté directement au PIC (SPI Interface with 20 MHz Clock Support -> suffisant pour le 16k ici)
-
-    % Utilisation d'un seul channel en 8bits (mode x2) : he  user
-    % can  configure  the  full-scale  range  of  the  device  to  be
-    % VREF or 2 * VREF by setting the Gain Selection Option
-    % bit (gain of 1 of 2)
-
-    % améliorations :
-    % - utilisation du mode shutdown quand le programme est en mode configuration
-    % SHDN is the hardware shutdown input pin. When this
-    % pin  is  low,  both  DAC  channels  are  shut  down.  DAC
-    % output is not available during the shutdown.
-    % - setter voutb à sutdown (cf p.24)
-
-    % VDD entre 2,7 et 5,5V
-    %It is recommended to use an appropriate bypass
-    %capacitor  of  about  0.1 μF  (ceramic)  to  ground.  An
-    %additional 10 μF capacitor (tantalum) in parallel is also
-    %recommended to further attenuate high frequency
-    %noise present in application boards.
-
-    % CS active à l'état bas -> configuration tris en output et set à 1. Idem pour LDAC (load pin qui transfère le registre vers les pin d'output)
-
-    % SCK -> sck
-
-    % sdi -> sdo
-
-
-    % lA TENSION DE SORTIE $V_{OUT} = \frac{V_{REF} \times D_n}{2^n} G$
-    % ici le gain est de 2 (mode x2 GA à 0), VRef est à VDD -> 5V, Dn = input et n = résolution (ici 12 bits)
-
-    % -> $V_{OUT} = \frac{5 \times D_n}{2048}$ -> Dn varie entre 0 et 255 (car utilisé max à 8 bits ici) -> vout varie entre 0 et 0,62V (vérifié à l'oscillo -> ok)
-
-
-    parler aussi de la taille max des buffers en fonction de la mémoire du PIC
-
-
-    \paragraph{Filtre numérique}
-    %https://fr.wikipedia.org/wiki/Filtre_num%C3%A9rique
-    %http://mustig.free.fr/fr/doc/exemples_commentes/doc/fil_rec.htm
-    Forme générale (normalisée) des filtres numériques d'ordre M :
-    $$ y[N] = \sum\limits_{k=0}^{N} b_k \times x_{n-k} - \sum\limits_{k=1}^{M} a_k y_{n-k} $$
-    $$ Y_j = \sum\limits_{i=0}^{N-1} A_i X_{j-i} - \sum\limits_{i=1}^{N-1} B_i X_{j-i} $$
-
-    \paragraph{Filtre moyenne glissante}
-    Filtre à réponse impulsionnelle finie (FIR: finite impulse response) dont le coefficient $a = \frac{1}{N}$ et $b = 0$
-
-
-%     \paragraph{Filtre echo}
-%     Paramètre pour configurer le poids de l'echo par rapport au signal : le poids du signal est à 6 et l'echo p.e. à 2 -> rapport 3/4 - 1/4
-%     Paramètre nr back ici à 300 -> je recule de 3000 échantillons => à une fréquence de 10kHz, si je recule de 3000 échantillons, on a un echo à 3/10ème de seconde
-
-%     Attention à la taille du vecteur : c'est beaucoup plus simple de gérer le vecteur en C qu'en assembleur (cf projet précédent) mais il faut quand même regarder la taille de la mémoire dans la datasheet pour ne pas dépasser. Le prof a mis un max de 3600 car on a une mémoire de 4k. Le seul moyen d'allonger les temps d'echos est de jouer sur la fréquence d'échantillonnage
-
-
-
-
-    % Fréquence d'échantillonnage, fréquence utile du signal et fréquence de coupure du filtre de Laplace (entre max Fs/2 et min la fréquence du signal: à la moitié de la fréquence d'échantillonnage, c'est ok pour toutes les fréquences de signaux mais pour mieux lisser, on peut jouer avec la fréquence de coupure du filtre pour la rapprocher de la fréquence du signal, d'autant plus qu'ici on a un filtre de Laplace, d'ordre 1, i.e. un simple RC qui a donc une faible sélectivité, i.e. la coupure n'est pas nette)
-    % Remarque : le filtre de Laplace déphase le signal de sortie d'autant plus qu'il est plus filtrant.
-
-%     \newpage
-%     \section{Tests}
-
-%     \paragraph{}
-%     Tout au long du développement, le programme a été testé avec la simulation Proteus et les différents outils à disposition. L'oscilloscope branché sur les différentes PIN a permis de vérifier la génération d'un signal en sortie des DAC et en sortie des filtres de Laplace mais aussi de s'assurer que la durée de traitement ne dépasse pas la durée de l'interruption grâce à la PIN activée durant le traitement du signal ou encore de débugger les communications via le bus SPI.
-
-%     \paragraph{}
-%     Une fois la programmation du filtre terminée, la sortie des filtres a été validée avec les analyses de Fourier et les analyses de signaux audio générées dans Proteus. Ce sont les résultats de ces tests qui sont présentés dans cette section. Ils ont été produits en changeant les paramètre d'initialisation du filtre avant la compilation du programme. Tous les tests réalisés se trouvent dans le code source et il suffit de décommenter le test souhaité pour le reproduire.
-
-%     \paragraph{}
-%     Pour les différents tests, les fréquences de coupures des filtres de Laplace en sortie des DAC on été réglées soit à \SI{16}{\kilo\hertz} soit à \SI{8}{\kilo\hertz} en fonction de la fréquence d'échantillonnage testée (ce paramètre est affiché sous le filtre dans le projet Proteus). Le fichier d'entrée a également été échantillonné à \SI{16}{\kilo\hertz} ou à \SI{8}{\kilo\hertz}, ce qui permet de se passer de filtre anti-repliement.
-
-%     \paragraph{}
-%     Tous les signaux utilisés pour les tests et tous les signaux générés par les tests se trouvent dans le dossier \emph{wav} du projet.
-
-
-%     \subsection{Filtre par moyenne glissante}
-%     \paragraph{}
-%     Les tests du filtre par moyenne glissante ont été effectués sur l'audio \emph{drake\_30s\_delay\_1s\_8k.wav} pour les tests faits avec une fréquence d'échantillonnage de \SI{8}{\kilo\hertz} et \emph{drake\_30s\_delay\_1s\_16k.wav} pour une fréquence d'échantillonnage de \SI{16}{\kilo\hertz}. Le délai d'une seconde permet de laisser le temps au programme de s'initialiser.
-
-%     \paragraph{}
-%     Le filtre par moyenne possible implémente assez peu de combinaisons possibles de coefficient et de fréquence d'échantillonnage que pour pouvoir les tester toutes.
-
-%     \paragraph{}
-%     Que ce soit en \SI{16}{\kilo\hertz} ou en \SI{8}{\kilo\hertz}, les tests mettent en évidence que le filtre est d'autant plus filtrant que son coefficient est élevé. Plus le coefficient augment, plus le signal de sortie est atténué par rapport au signal d'entrée. Les fréquences du signal de sortie sont également de plus affaiblies à mesure que le coefficient du filtre augmente.
-
-%     \paragraph{}
-%     Les hautes fréquences sont par contre plus puissantes pour le signal de sortie que pour le signal d'entrée : il s'agit du bruit de quantification. Ce bruit n'est pas lié au filtre mais au traitement numérique d'un signal analogique : il apparaît également quand le signal lu est directement reporté sur la DAC.
+    \paragraph{}
+    Dans tous les tests, le signal de sortie apparaît légèrement déphasé par rapport au signal d'entrée. Cet effet est principalement dû au filtre de Laplace plus qu'au temps de traitement du signal.
 
 %     \begin{figure}[H]
 %         \centering
@@ -704,7 +598,7 @@
 %     Possible amélioration mais complique beaucoup la programmation. En plus, en 16kHz, on est vraiment à la limite des possibilités du processeur -> beaucoup d'interruptions en haute priorité -> les entrées et sorties risquent d'être extrêmement
 
 
-
+% parler aussi de la taille max des buffers en fonction de la mémoire du PIC
 
 
 
