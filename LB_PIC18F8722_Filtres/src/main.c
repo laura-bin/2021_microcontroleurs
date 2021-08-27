@@ -346,11 +346,11 @@ void main(void) {
     // echoes          = F_ECHO_N_MIN;
 
     // Echo filter test: 1 echo, delay 400-200-100ms (8kHz)
-    filter          = F_ECHO;
-    echoes          = F_ECHO_N_MIN;
+    // filter          = F_ECHO;
+    // echoes          = F_ECHO_N_MIN;
     // echo_delay      = F_ECHO_DEL_MAX;
     // echo_delay      = F_ECHO_DEL_MAX>>1;
-    echo_delay      = F_ECHO_DEL_MAX>>2;
+    // echo_delay      = F_ECHO_DEL_MAX>>2;
 
     // Echo filter test: 2 echoes, delay 400ms (8kHz)
     // filter          = F_ECHO;
