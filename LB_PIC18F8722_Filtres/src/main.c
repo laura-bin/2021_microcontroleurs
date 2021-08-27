@@ -186,8 +186,7 @@ void __interrupt(high_priority) Int_Vect_High(void) {
 
     TICK = 1;                       // debug tick ON
 
-    ADCON0bits.NOT_DONE = 1;        // analog to digital conversion, result in the input buffer
-    while (ADCON0bits.NOT_DONE);
+    while (ADCON0bits.NOT_DONE);    // analog to digital conversion, result in the input buffer
     sig_in[index[0]] = (signed char) (ADRESH - 128);
 
     output = 0;
@@ -245,6 +244,7 @@ void main(void) {
     char prev_mode;         // previous mode selected: run, config or none
     int cutoff_max;         // high/low pass filter max cutoff value determined by the sampling frequency
     double omega;           // angular frequency used to initialize some filters coefficients
+    // char text[20];
 
     // PIC configuration
     TRISE   = 0xFF;         // PORTE (menu buttons) -> input
@@ -258,7 +258,7 @@ void main(void) {
     CCP2CON = 0x0B;         // CCP2 interruption in compare mode with trigger special event
     CCPR2H  = 0x04;         // 1250us -> 8kHz
     CCPR2L  = 0xE2;
-    T1CON   = 0x01;         // Timer1 prescale 1:8
+    T1CON   = 0x01;         // Timer1 prescale 1:1
     TMR1H   = 0;            // Timer1 -> 0
     TMR1L   = 0;
     RCONbits.IPEN   = 1;    // enable priority levels on interrupts
@@ -280,46 +280,62 @@ void main(void) {
     echo_delay      = F_ECHO_DEL_MIN;       // echo delay: minimum
     echoes          = F_ECHO_N_MIN;         // number of echoes: minimum
 
-    // Moving average filter test: coef 4 (16kHz)
-    filter          = F_MOV_AVG;
-    mov_avg_coef    = 2;
-    // CCPR2H          = CCPR2H >> 1;
-    // CCPR2L          = CCPR2L >> 1;
-    // sampling        = sampling << 1;
-
-    // Moving average filter test: coef 2 (8kHz)
-    filter          = F_MOV_AVG;
-    mov_avg_coef    = 1;
-
-    // Moving average filter test: coef 4 (8kHz)
-    filter          = F_MOV_AVG;
-    mov_avg_coef    = 2;
-
-    // Moving average filter test: coef 8 (8kHz)
-    filter          = F_MOV_AVG;
-    mov_avg_coef    = 3;
-
-    // Moving average filter test: coef 2 (16kHz)
-    // filter          = F_MOV_AVG;
-    // mov_avg_coef    = 1;
-    // CCPR2H          = CCPR2H >> 1;
-    // CCPR2L          = CCPR2L >> 1;
-    // sampling        = sampling << 1;
-
     // Moving average filter test: coef 2-4-8 (16kHz)
     // filter          = F_MOV_AVG;
-    // mov_avg_coef    = 1;
-    // mov_avg_coef    = 2;
-    // mov_avg_coef    = 3;
     // CCPR2H          = CCPR2H >> 1;
     // CCPR2L          = CCPR2L >> 1;
     // sampling        = sampling << 1;
-
-    // Moving average filter test: coef 2-4-8 (8kHz)
-    filter          = F_MOV_AVG;
-    mov_avg_coef    = 1;
+    // mov_avg_coef    = 1;
     // mov_avg_coef    = 2;
     // mov_avg_coef    = 3;
+
+    // Moving average filter test: coef 2-4-8 (8kHz)
+    // filter          = F_MOV_AVG;
+    // mov_avg_coef    = 1;
+    // mov_avg_coef    = 2;
+    // mov_avg_coef    = 3;
+
+    // Low-pass filter test (16kHz)
+    // filter          = F_LOW_PASS;
+    // CCPR2H          = CCPR2H >> 1;
+    // CCPR2L          = CCPR2L >> 1;
+    // sampling        = sampling << 1;
+    // low_cutoff      = 0;
+    // low_cutoff      = 500;
+    // low_cutoff      = 1000;
+    // low_cutoff      = 2000;
+    // low_cutoff      = 4000;
+    // low_cutoff      = 8000;
+
+    // Low-pass filter test (8kHz)
+    // filter          = F_LOW_PASS;
+    // low_cutoff      = 0;
+    // low_cutoff      = 250;
+    // low_cutoff      = 500;
+    // low_cutoff      = 1000;
+    // low_cutoff      = 2000;
+    // low_cutoff      = 4000;
+
+    // High-pass filter test (16kHz)
+    // filter          = F_HIGH_PASS;
+    // CCPR2H          = CCPR2H >> 1;
+    // CCPR2L          = CCPR2L >> 1;
+    // sampling        = sampling << 1;
+    // high_cutoff     = 0;
+    // high_cutoff     = 500;
+    // high_cutoff     = 1000;
+    // high_cutoff     = 2000;
+    // high_cutoff     = 4000;
+    // high_cutoff     = 8000;
+
+    // High-pass filter test (8kHz)
+    // filter          = F_HIGH_PASS;
+    // high_cutoff     = 0;
+    // high_cutoff     = 250;
+    // high_cutoff     = 500;
+    // high_cutoff     = 1000;
+    // high_cutoff     = 2000;
+    // high_cutoff     = 4000;
 
     // Echo filter test: 1 echo, delay 200ms (16kHz)
     // filter          = F_ECHO;
@@ -329,30 +345,22 @@ void main(void) {
     // echo_delay      = F_ECHO_DEL_MAX;
     // echoes          = F_ECHO_N_MIN;
 
-    // Echo filter test: 1 echo, delay 400ms (8kHz)
-    // filter          = F_ECHO;
+    // Echo filter test: 1 echo, delay 400-200-100ms (8kHz)
+    filter          = F_ECHO;
+    echoes          = F_ECHO_N_MIN;
     // echo_delay      = F_ECHO_DEL_MAX;
-    // echoes          = F_ECHO_N_MIN;
-
-    // Echo filter test: 1 echo, delay 200ms (8kHz)
-    // filter          = F_ECHO;
     // echo_delay      = F_ECHO_DEL_MAX>>1;
-    // echoes          = F_ECHO_N_MIN;
-
-    // Echo filter test: 1 echo, delay 100ms (8kHz)
-    // filter          = F_ECHO;
-    // echo_delay      = F_ECHO_DEL_MAX>>2;
-    // echoes          = F_ECHO_N_MIN;
+    echo_delay      = F_ECHO_DEL_MAX>>2;
 
     // Echo filter test: 2 echoes, delay 400ms (8kHz)
     // filter          = F_ECHO;
-    // echo_delay      = F_ECHO_DEL_MAX;
     // echoes          = 2;
+    // echo_delay      = F_ECHO_DEL_MAX;
 
     // Echo filter test: 3 echoes, delay 400ms (8kHz)
     // filter          = F_ECHO;
-    // echo_delay      = F_ECHO_DEL_MAX;
     // echoes          = F_ECHO_N_MAX;
+    // echo_delay      = F_ECHO_DEL_MAX;
 
     display_parameters();
 
@@ -370,13 +378,17 @@ void main(void) {
                 switch (filter) {                   // depending on the filter selected:
                 case F_LOW_PASS:                        // compute the low-pass filter coefficients
                     omega = 2.0 * M_PI * (double) low_cutoff / (double) sampling / 1000.0;
-                    coef[0] = (signed char) round(omega / (2.0 + omega) * pow(2.0, COEF_SCALE));
-                    coef[1] = (signed char) round((2.0 - omega) / (2.0 + omega) * pow(2.0, COEF_SCALE));
+                    coef[0] = (int) round(omega / (2.0 + omega) * pow(2.0, COEF_SCALE));
+                    coef[1] = (int) round((2.0 - omega) / (2.0 + omega) * pow(2.0, COEF_SCALE));
+                    // sprintf(text, "%4d %4d", coef[0], coef[1]);
+                    // send_text_LCD(text, 3, 0);
                     break;
                 case F_HIGH_PASS:                       // or compute the low-pass filter coefficients
                     omega = 2.0 * M_PI * (double)high_cutoff / (double)sampling / 1000.0;
-                    coef[0] = (signed char) round(2.0 / (2.0 + omega) * pow(2.0, COEF_SCALE));
-                    coef[1] = (signed char) round((2.0 - omega) / (2.0 + omega) * pow(2.0, COEF_SCALE));
+                    coef[0] = (int) round(2.0 / (2.0 + omega) * pow(2.0, COEF_SCALE));
+                    coef[1] = (int) round((2.0 - omega) / (2.0 + omega) * pow(2.0, COEF_SCALE));
+                    // sprintf(text, "%4d %4d", coef[0], coef[1]);
+                    // send_text_LCD(text, 3, 0);
                     break;
                 case F_ECHO:                            // or initialize the echoes indexes
                     for (i = 0; i < echoes; i++) index[echoes-i] = IN_BUF_SIZE - echo_delay/(i+1);
