@@ -538,7 +538,7 @@ void display_parameters() {
         send_text_LCD("Moving avg filter ", M_FILTER, 0);
         sprintf(text, "Sampling %6d Hz", sampling*1000);
         send_text_LCD(text, M_SAMPLING, 0);
-        sprintf(text, "Coefficient %6d", 1 << mov_avg_coef);
+        sprintf(text, "Steps       %6d", 1 << mov_avg_coef);
         send_text_LCD(text, M_VALUE, 0);
         send_text_LCD("                  ", M_VALUE2, 0);
         break;

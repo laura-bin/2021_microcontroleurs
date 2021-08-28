@@ -772,12 +772,10 @@
 
 
     \section{Difficultés rencontrées}
-%     % Le calcul des mises à échelle pour s'assurer qu'il n'y a pas de dépassement de valeurs.
+    \paragraph{}
+    Pour la réalisation de ce projet, j'ai principalement rencontré des difficultés avec Proteus. J'ai conçu un programme avec un menu circulaire qui s'est révélé peu adapté aux tests en simulation. J'ai donc dû recompiler le programme pour chaque test ce qui m'a fait perdre du temps (en plus des plantages réguliers de Proteus). Pour les tests en "temps réel" ou pour une application qui ne serait plus en simulation, ce type de menu reste pratique.
 
-%     % concevoir un programme qui fonctionne bien en simulation
-
-%     % proposer à la fois un menu assez riche et économiser l'espace pour le réserver pour les buffers: il n'y avait pas durée d'écho minimale précisée donc ça va mais j'aurais clairement pu faire mieux (aller jusqu'à 450 ms pour du 8k)
-
-% parler aussi de la taille max des buffers en fonction de la mémoire du PIC
+    \paragraph{}
+    Le fait de proposer un menu assez riche a aussi le désavantage d'utiliser la mémoire qui pourrait être réservée aux filtres. L'espace en mémoire pour les données est limité à 3936 bytes et une programmation plus économe m'aurait permis d'implémenter un écho encore un peu plus long, sans toutefois pouvoir aller jusqu'à \SI{500}{\milli\second}. Puisque ce n'était pas un des critères demandés par le cahier des charges, je n'ai pas choisi de concevoir le programme de cette manière mais je suis consciente que des projets utilisant des ressources aussi limitée demande toujours d'être attentif\textperiodcentered ve à leur utilisation.
 
 \end{document}
