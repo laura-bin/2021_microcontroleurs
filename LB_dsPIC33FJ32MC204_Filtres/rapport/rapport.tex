@@ -1,0 +1,161 @@
+\documentclass{article}
+
+\usepackage[french]{babel}
+\usepackage[T1]{fontenc}
+\usepackage{moreverb}       % verbatim with tab
+
+\usepackage{wrapfig}
+\usepackage{graphicx}
+\usepackage{geometry}
+\geometry{hmargin=2.5cm}
+\usepackage{amsmath}
+\usepackage{siunitx}
+
+\usepackage{graphicx}
+\usepackage{subcaption}
+\usepackage{float}
+\usepackage{hyperref}
+\usepackage{setspace}
+\usepackage{xcolor}
+\usepackage{pdfpages}
+\usepackage{enumitem}
+\usepackage{lscape}
+
+\usepackage{fancyhdr}       % en-têtes
+\usepackage{lastpage}       % numéro de dernière page
+
+\usepackage{libertine} % Police Linux Libertine en sérif, Linux Biolinum en sans-sérif.
+
+\usepackage[libertine]{newtxmath} % Math avec la police Libertine
+%\addtokomafont{disposition}{\normalfont\sffamily} % Police des titres (ajouter \normalfont pour enlever le bold)
+%\addtokomafont{paragraph}{\bfseries} % Titre des paragraphes en gras
+%\addtokomafont{subsubsection}{\bfseries} % Titre des subsubsections en gras
+\usepackage[scaled=.8]{beramono} % Police monospace
+
+\usepackage{fancyhdr}       % en-têtes
+\usepackage{lastpage}       % numéro de dernière page
+
+\title{Microcontrôleurs\bigbreak \bigbreak
+    \large Configuration d'un dsPIC33FJ32MC204}
+    % \bigbreak
+    % \normalsize \bigbreak}
+\date{2020 -- 2021}
+\author{Laura Binacchi}
+
+\pagestyle{fancy}
+\renewcommand\headrulewidth{1pt}
+\fancyhead[L]{Laura Binacchi}
+\fancyhead[C]{Microcontrôleurs -- Dossier filtres sur \texttt{dsPIC33FJ32MC204}}
+\fancyhead[R]{\today}
+
+
+\begin{document}
+    \pagenumbering{arabic}
+
+    \section{Configuration}
+    \begin{itemize}
+        \item Installation du compilateur XC16
+        \item Génération des configurations par défaut : dans la fenêtre \emph{Configurations Bits}, cliquer sur \emph{Generate Source Code to Output} et copier la sortie au début du main
+        \item Désactivation du Watchdog Timer
+    \end{itemize}
+
+
+    \subsection{Oscillateur}
+    \paragraph{}
+    Utilisation de l'oscillateur interne (primary) :
+    \begin{itemize}
+        \item \texttt{\#pragma config FNOSC = PRI}
+        \item \texttt{\#pragma config IESO = OFF}
+        \item \texttt{\#pragma config POSCMD = HS}
+    \end{itemize}
+    \paragraph{}
+    Oscillateur du dsPIC à \SI{20}{\mega\hertz} (peut aller jusqu'à 40) -> fréquence de cycle à $\frac{20e6}{2} = \SI{10}{\mega\hertz}$. Fréquence vérifiée à l'oscilloscope.
+
+
+    \subsection{Bus SPI}
+    \paragraph{}
+    Configuration PPS (à faire avant toute autre instruction) : déverrouiller l'accès, mapper les PIN du bus SPI puis reverrouiller l'accès.
+    \begin{itemize}
+        \item \texttt{\_\_builtin\_write\_OSCCONL(OSCCON \& \~(1<<6));}
+        \item \texttt{RPINR20bits.SCK1R = 20;} (SDI)
+        \item \texttt{RPOR10bits.RP21R = 7;} (SDO)
+        \item \texttt{RPOR11bits.RP23R = 8;} (SCK)
+        \item \texttt{\_\_builtin\_write\_OSCCONL(OSCCON $|$ (1<<6));}
+    \end{itemize}
+
+    \paragraph{}
+    La fonction d'initialisation \texttt{init\_SPI()} reste à peu près la même que pour le projet précédent, il suffit de changer les variables préprocesseur du header et quelques noms de registres : \texttt{SSPBUF} devient \texttt{SPI1BUF}, \texttt{SSP1STAT} devient \texttt{SPI1STAT}, les bits \texttt{CKE} (clock edge) et \texttt{SSPEN} (qui devient \texttt{SPIEN}) changent de registre de configuration. Le bus SPI est utilisé en mode 8 bits car le LCD ne supporte pas plus mais il peut être utilisé en mode 16 bits, ce qui n'était pas possible avec le \texttt{PIC18F8722}, en settant le bit \texttt{SPI1CON1bits.MODE16}.
+
+    \paragraph{}
+    Par rapport à l'initialisation du projet précédent, il faut ajouter les instructions :
+    \begin{itemize}
+        \item \texttt{SPI1CON1bits.MSTEN = 1;} pour activer le bus SPI en mode principal
+        \item \texttt{SPI1CON1bits.SPRE = 6;} (prescaler secondaire)
+        \item \texttt{SPI1CON1bits.PPRE = 2;} (prescaler primaire)
+    \end{itemize}
+
+
+    \subsection{MCP4922}
+    \paragraph{}
+    En 12 bits et sans le mode x2, le MCP4922 a une plage de sortie de 0 à \SI{4.9988}{\volt} ($V_{OUT} = \frac{V_{REF} \times D_n}{2^n} G$). C'est la même qu'en entrée -> pas besoin d'amplification en sortie comme dans le projet précédent qui utilisait le MCP4922 en 8 bits.
+
+
+    \subsection{I/O}
+    \paragraph{}
+    Le programme n'est pas interactif -> il y a peu d'entrées et sorties à configurer.
+    \begin{itemize}
+        \item \texttt{TRISAbits.TRISA0 = 1;} lecture du signal sur \texttt{AN0}
+        \item \texttt{TRISCbits.TRISC9 = 0;} \texttt{TICK} en output
+        \item \texttt{TICK = 0;} \texttt{TICK} initialisé à 0
+    \end{itemize}
+    \paragraph{}
+    Les entrées et sorties utilisées par le bus SPI et les périphériques qui y sont associés sont configurées dans la fonction \texttt{init\_SPI()}.
+
+
+    \subsection{ADC}
+    \paragraph{}
+    La conversion analogique-numérique est plus complexe sur le dsPIC : elle se configure sur 10 registres. Mais le principe reste le même qu'avec le \texttt{PIC18F8722}.
+    \begin{itemize}
+        \item \texttt{AD1CON1bits.ADON = 0;} désactivation de la conversion (sinon la configuration ne peut pas se faire)
+        \item \texttt{AD1CON1bits.AD12B = 1;} résultat sur un seul canal en 12bits
+        \item \texttt{AD1CON3bits.SAMC = 4;} fréquence de conversion à 4 $T_{AD}$
+        \item \texttt{AD1CON3bits.ADCS = 3;} clock de conversion : 1 $T_{AD} = 3 T_{CY}$
+        \item \texttt{AD1PCFGLbits.PCFG0 = 0;} \texttt{AN0} en analogique
+        \item \texttt{AD1CON1bits.ADON = 1;} réactivation de la conversion
+    \end{itemize}
+
+    \paragraph{}
+    Le reste des paramètres sont les paramètres par défaut : tensions de références à $V_{DD}$ et $V_{SS}$, conversion sur le channel 0, représentation du résultat en integer (peut aussi être représenté en Qx).
+
+    \paragraph{}
+    Fonctionnement de la conversion : armer la conversion, attendre qu'elle soit finie (bit \texttt{DONE}) et lire le résultat dans le buffer \texttt{ADC1BUF0}. C'est le même principe qu'avec le \texttt{PIC18F8722} mais la conversion doit être armée manuellement car pas de special event trigger.
+    \begin{itemize}
+        \item \texttt{AD1CON1bits.SAMP = 1;}
+        \item \texttt{AD1CON1bits.SAMP = 0;}
+        \item \texttt{while(!AD1CON1bits.DONE);}
+    \end{itemize}
+
+
+    \subsection{Interruption par le Timer1}
+    \paragraph{}
+    Les interruptions sont plus complexes que sur le \texttt{PIC18F8722} avec notamment 7 niveaux d'interruptions programmables. Il y a donc plus de registres liés aux interruptions (voir l'annexe sur les interruptions). La valeur du timer est initialisée à 64923 pour 16kHz avec correction (nécessaire car le timer n'est pas réinitialisé automatiquement comme dans le premier dossier), fréquence vérifiée à l'oscilloscope avec le \texttt{TICK}. Le programme n'implémente pas la fréquence d'échantillonnage de \SI{8}{\kilo\hertz}. Attention : l'activation de l'interruption doit se faire en dernier.
+
+    \begin{itemize}
+        \item \texttt{T1CON = 0x8000;} activation du timer1 sur la clock interne avec un prescaler \texttt{1:1}
+        \item \texttt{TMR1 = 64923;} pour du \SI{16}{\kilo\hertz}
+        \item \texttt{\_T1IP = 7;} priorité de l'interruption par le timer à 7, la plus haute (programmable entre 1 et 7)
+        \item \texttt{\_T1IF = 0;} interrupt flag effacé
+        \item \texttt{\_T1IE = 1;} interruption activée
+    \end{itemize}
+
+
+
+\section{Fonctionnement du programme}
+\paragraph{}
+Pas d'interaction dans Proteus : les paramètres du filtres doivent être initialisés dans le code et le code recompilé pour être testé (de la même manière que les tests ont été faits pour le premier dossier).
+
+\section{Avantages}
+\paragraph{}
+Avec son arithmétique 16 bits, le \texttt{dsPIC} offre plus de possibilités de traitement du signal que le \texttt{PIC18F} : par exemple, le filtre par moyenne glissante peut être implémenté sans rotation de bits et avec plus de pas que sur le PIC.
+
+\end{document}
