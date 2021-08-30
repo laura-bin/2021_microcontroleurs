@@ -44,7 +44,7 @@
 \pagestyle{fancy}
 \renewcommand\headrulewidth{1pt}
 \fancyhead[L]{Laura Binacchi}
-\fancyhead[C]{Microcontrôleurs -- Dossier filtres sur PIC18F8722}
+\fancyhead[C]{Microcontrôleurs -- Dossier filtres sur \texttt{PIC18F8722}}
 \fancyhead[R]{\today}
 
 
@@ -76,7 +76,7 @@
     La fréquence d’échantillonnage $F_e$ du signal sera configurable à 8kHz ou 16kHz. La fréquence d’échantillonnage conditionne évidement les fréquences de coupure des filtres.
 
     \paragraph{}
-    Le mode « Configuration » et les menus sont laissés à l’appréciation du concepteur. Attention aux conflits potentiels entre le LCD et le convertisseur CNA, si ils utilisent tous les deux une connexion SPI.
+    Le mode « Configuration » et les menus sont laissés à l’appréciation du concepteur. Attention aux conflits potentiels entre le LCD et le convertisseur CNA, s'ils utilisent tous les deux une connexion SPI.
 
     \subsection{Description des 4 filtres demandés}
 
@@ -114,7 +114,7 @@
     \begin{itemize}
         \item le type de filtre est affiché sur la première ligne;
         \item la fréquence d'échantillonnage est affichée sur la deuxième ligne;
-        \item les paramètres du filtre sont affichés sur la troisième et, uniquement dans le cas du filtre echo, sur la quatrième ligne.
+        \item les paramètres du filtre sont affichés sur la troisième et, uniquement dans le cas du filtre écho, sur la quatrième ligne.
     \end{itemize}
 
     \begin{figure}[H]
@@ -137,7 +137,7 @@
         \begin{subfigure}[b]{0.34\textwidth}
             \centering
             \includegraphics[width=.9\textwidth]{./images/vue_echo.png}
-            \caption{Filtre echo}
+            \caption{Filtre écho}
         \end{subfigure}
         \caption{Vues des différents menus}
    \end{figure}
@@ -190,13 +190,13 @@
     La modification du type de filtre \textbf{[31]} se fait, comme la navigation, de manière circulaire : il tourne en boucle en appuyant sur le bouton \texttt{[+]} ou sur le bouton \texttt{[-]}, dans un sens de défilement ou dans l'autre. Lorsque le type de filtre est modifié, c'est tout l'affichage qui est mis à jour \textbf{[32]} car les paramètres configurables dépendent du type de filtre actif.
 
     \paragraph{}
-    La fréquence d'échantillonnage n'a que deux valeurs possibles : \SI{8}{\kilo\hertz} ou \SI{16}{\kilo\hertz}. Elle n'est donc diminuée que si elle est au maximum (de la même manière, elle ne sera augmentée que si elle est au minimum). La valeur de comparaison de l'interruption est doublée \textbf{[41]} et la valeur de la fréquence d'échantillonnage est divisée par deux \textbf{[42]} puis mise à jour sur le LCD \textbf{[43]}. La fréquence d'échantillonnage détermine la fréquence de coupure maximale qui peut être utilisée par les filtres : ce maximum est fixé à la moitié de la fréquence d'échantillonnage \textbf{[44]} (théorème de Shannon). Si les fréquences de coupure des filtres passe-bas et passe-haut dépassent cette valeur maximale, elles prennent cette nouvelle valeur et, si filtre actif est un filtre passe-bas ou passe-haut, le LCD est mis à jour \textbf{[45]}. La fréquence d'échantillonnage détermine également la valeur maximale que peut prendre la durée de l'écho : lorsque la fréquence est divisée par deux, la durée de l'écho est doublée et si le filtre écho est sélectionné, la nouvelle valeur est affichée \textbf{[46]}.
+    La fréquence d'échantillonnage n'a que deux valeurs possibles : \SI{8}{\kilo\hertz} ou \SI{16}{\kilo\hertz}. Elle n'est diminuée que si elle est au maximum (de la même manière, elle ne sera augmentée que si elle est au minimum). La valeur de comparaison de l'interruption est doublée \textbf{[41]} et la valeur de la fréquence d'échantillonnage est divisée par deux \textbf{[42]} puis mise à jour sur le LCD \textbf{[43]}. La fréquence d'échantillonnage détermine la fréquence de coupure maximale qui peut être utilisée par les filtres : ce maximum est fixé à la moitié de la fréquence d'échantillonnage \textbf{[44]} (théorème de Shannon). Si les fréquences de coupure des filtres passe-bas et passe-haut dépassent cette valeur maximale, elles prennent cette nouvelle valeur et, si filtre actif est un filtre passe-bas ou passe-haut, le LCD est mis à jour \textbf{[45]}. La fréquence d'échantillonnage détermine également la valeur maximale que peut prendre la durée de l'écho : lorsque la fréquence est divisée par deux, la durée de l'écho est doublée et si le filtre écho est sélectionné, la nouvelle valeur est affichée \textbf{[46]}.
 
     \paragraph{}
-    La diminution de la première valeur met à jour \textbf{[51]}, en fonction du filtre actif, soit : le coefficient du filtre par moyenne glissante; la fréquence de coupure du filtre passe-bas; la fréquence de coupure du filtre passe-haut; le délai du filtre echo.
+    La diminution de la première valeur met à jour \textbf{[51]}, en fonction du filtre actif, soit : le coefficient du filtre par moyenne glissante; la fréquence de coupure du filtre passe-bas; la fréquence de coupure du filtre passe-haut; le délai du filtre écho.
 
     \paragraph{}
-    La deuxième valeur \textbf{[61]} ne concerne que le filtre echo et met à jour le nombre d'échos.
+    La deuxième valeur \textbf{[61]} ne concerne que le filtre écho et met à jour le nombre d'échos.
 
     \paragraph{}
     Ces valeurs ne peuvent être diminuées que si elles sont strictement supérieures aux valeurs minimales définies par des variables du préprocesseur. Elles sont diminuées d'un pas également défini par des variables du préprocesseur. Le même mécanisme est implémenté pour l'augmentation des valeurs.
@@ -212,13 +212,13 @@
     Comme le mode de configuration, le mode de traitement du signal n'est initialisé que lors du passage du mode \texttt{CONFIG} au mode \texttt{RUN} \textbf{[2]} : le sélecteur de menus \texttt{<} est masqué et le signal est initialisé en fonction du type de filtre actif et de ses paramètres.
 
     \paragraph{}
-    Une interruption survient toutes les \SI{125}{\micro\second} (fréquence d'échantillonnage à \SI{8}{\kilo\hertz}) ou toutes les \SI{62,5}{\micro\second} (fréquence d'échantillonnage à \SI{16}{\kilo\hertz}). Elle déclenche la conversion analogique-numérique (ADC) \textbf{[100]}. Quand elle est terminée, son résultat est lu dans le tampon d'entrée \textbf{[101]}. Le signal est alors traité selon le type de filtre et ses paramètres \textbf{[102]} et la résultat du traitement est placé dans le tampon de sortie pour pouvoir être transmis au convertisseur numérique analogique (DAC) \textbf{[103]}.
+    Une interruption survient toutes les \SI{125}{\micro\second} (fréquence d'échantillonnage à \SI{8}{\kilo\hertz}) ou toutes les \SI{62,5}{\micro\second} (fréquence d'échantillonnage à \SI{16}{\kilo\hertz}). Elle déclenche la conversion analogique-numérique (ADC) \textbf{[100]}. Quand elle est terminée, son résultat est lu dans le tampon d'entrée \textbf{[101]}. Le signal est alors traité selon le type de filtre et ses paramètres \textbf{[102]} et le résultat du traitement est placé dans le tampon de sortie pour pouvoir être transmis au convertisseur numérique analogique (DAC) \textbf{[103]}.
 
 
 
     \section{Fréquences utilisées}
     \paragraph{}
-    Le cahier des charges demande d'implémenter des fréquences d'échantillonnage de 8 et de \SI{16}{\kilo\hertz}. Conformément au théorème de de Nyquist-Shannon les fréquences utiles des signaux sont donc respectivement limitées à 4 et à \SI{8}{\kilo\hertz}.
+    Le cahier des charges demande d'implémenter des fréquences d'échantillonnage de 8 et de \SI{16}{\kilo\hertz}. Conformément au théorème de Nyquist-Shannon les fréquences utiles des signaux sont donc respectivement limitées à 4 et à \SI{8}{\kilo\hertz}.
 
     \paragraph{}
     Les différents signaux testés ont été échantillonnés à 8 ou à \SI{16}{\kilo\hertz} permettant de se passer d'un filtre anti-repliement à l'entrée du signal. En sortie, les filtres de Laplace sont réglés à la fréquence utile du signal testé.
@@ -253,7 +253,7 @@
     \end{verbatimtab}
 
     \paragraph{}
-    Le Timer1 est activé avec un prescaler 1:1 : une valeur de comparaison de 1 déclencherait une interruption tous les cycles CPU, i.e. toutes les \SI{0.1}{\micro\second}.
+    Le Timer1 est activé avec un prescaler \texttt{1:1} : une valeur de comparaison de 1 déclencherait une interruption tous les cycles CPU, i.e. toutes les \SI{0.1}{\micro\second}.
     \begin{verbatimtab}
     [261]    T1CON   = 0x01;         // Timer1 prescale 1:1
     [262]    TMR1H   = 0;            // Timer1 -> 0
@@ -268,7 +268,7 @@
     \end{verbatimtab}
 
     \paragraph{}
-    Les interruptions prioritisées sont activées et les interruptions de haute et de basse priorité sont désactivées. Les interruptions de haute priorité seront activée après l'initialisation si le mode de traitement du signal est actif.
+    Les interruptions prioritisées sont activées et les interruptions de haute et de basse priorité sont désactivées. Les interruptions de haute priorité seront activées après l'initialisation si le mode de traitement du signal est actif.
     \begin{verbatimtab}
     [264]    RCONbits.IPEN   = 1;    // enable priority levels on interrupts
     [265]    INTCONbits.GIEH = 0;    // high priority interrupts disabled
@@ -285,7 +285,7 @@
 
     \subsection{Conversion analogique-digitale}
     \paragraph{}
-    La conversion analogique-digitale est activée par le registre \texttt{ADCON0} qui sélectionne également l'entrée analogique au convertisseur : la canal 0. Le registre \texttt{ADCON1} configure la PIN AN0 en analogique (le minimum nécessaire) et garde les tensions de référence par défaut : $A_{VDD}$ et $A_{VSS}$ (0 et \SI{5}{\volt}).
+    La conversion analogique-digitale est activée par le registre \texttt{ADCON0} qui sélectionne également l'entrée analogique liée au convertisseur : le canal 0. Le registre \texttt{ADCON1} configure la PIN AN0 en analogique (le minimum nécessaire) et garde les tensions de référence par défaut : $A_{VDD}$ et $A_{VSS}$ (0 et \SI{5}{\volt}).
     \begin{verbatimtab}
     [255]    ADCON0  = 0X01;         // ADC enabled on AN0
     [256]    ADCON1  = 0x0E;         // AN0 -> analogic
@@ -293,7 +293,7 @@
     \end{verbatimtab}
 
     \paragraph{}
-    Le registre \texttt{ADCON2} sélectionne la justification à gauche du résultat de la conversion dans les registres \texttt{ADRESH} et \texttt{ADRESL} : le programme travaille en 8bits et ne conserve donc que les 8 bits de poids forts lus dans le registre \texttt{ADRESH}.
+    Le registre \texttt{ADCON2} sélectionne la justification à gauche du résultat de la conversion dans les registres \texttt{ADRESH} et \texttt{ADRESL} : le programme travaille en 8 bits et ne conserve donc que les 8 bits de poids fort lus dans le registre \texttt{ADRESH}.
 
     \paragraph{}
     Le registre \texttt{ADCON2} permet aussi de définir le temps d'acquisition et la fréquence de conversion. Le temps d'acquisition est configuré à 0 $T_{AD}$ car les conversions sont effectuées selon la fréquence des interruptions (maximum à \SI{16}{\kilo\hertz}) : il se sera donc toujours passé assez de temps entre les conversions. La fréquence de conversion est choisie en fonction de la fréquence de l'oscillateur et du type de PIC conformément à la table 21-1 (\emph{TAD vs. DEVICE OPERATING FREQUENCIES}) de la datasheet. Elle est de 8 $T_{OSC}$ pour une fréquence d'oscillateur de \SI{10}{\mega\hertz} en respectant la recommendation de la datasheet de choisir le plus petit temps supérieur au minimum requis.
@@ -304,7 +304,7 @@
 
     \subsection{I/O}
     \paragraph{}
-    Les boutons de gestion du menu sont connectés directement au PORTE du PIC. Le registre TRISE est donc configuré en input.
+    Les boutons de gestion du menu sont connectés directement au \texttt{PORTE} du PIC. Le registre \texttt{TRISE} est donc configuré en input.
     \begin{verbatimtab}
     [250]    TRISE   = 0xFF;         // PORTE (menu buttons) -> input
     \end{verbatimtab}
@@ -320,7 +320,7 @@
     \end{verbatimtab}
 
     \paragraph{}
-    Enfin, bien que le projet permette de générer un signal via le convertisseur digital-analogique MCP4922, le DAC0808 n'a pas été supprimé car tous les tests présentés ont été fait avec ce DAC.
+    Enfin, bien que le projet permette de générer un signal via le convertisseur digital-analogique MCP4922, le DAC0808 n'a pas été supprimé car tous les tests présentés ont été faits avec ce DAC.
     \begin{verbatimtab}
     [253]    TRISD   = 0;            // DAC0808 -> output
     [254]    DAC0808 = 128;          // DAC0808 -> 0 + offset
@@ -333,7 +333,7 @@
     Tout au long du développement, le programme a été testé avec la simulation Proteus et les différents outils à disposition. L'oscilloscope branché sur les différentes PIN a permis de vérifier la génération d'un signal en sortie des DAC et en sortie des filtres de Laplace mais aussi de s'assurer que la durée de traitement ne dépasse pas la durée de l'interruption grâce à la PIN activée durant le traitement du signal ou encore de débugger les communications via le bus SPI.
 
     \paragraph{}
-    Une fois la programmation du filtre terminée, la sortie des filtres a été validée avec les analyses de Fourier et les analyses de signaux audio générées dans Proteus. Ce sont les résultats de ces tests qui sont présentés dans cette section. Ils ont été produits en changeant les paramètre d'initialisation du filtre avant la compilation du programme. Tous les tests réalisés se trouvent dans le code source et il suffit de décommenter le test souhaité pour le reproduire.
+    Une fois la programmation du filtre terminée, la sortie des filtres a été validée avec les analyses de Fourier et les analyses de signaux audio générées dans Proteus. Ce sont les résultats de ces tests qui sont présentés dans cette section. Ils ont été produits en changeant les paramètres d'initialisation du filtre avant la compilation du programme. Tous les tests réalisés se trouvent dans le code source et il suffit de décommenter le test souhaité pour le reproduire.
 
     \paragraph{}
     Pour les différents tests, les fréquences de coupures des filtres de Laplace en sortie des DAC ont été réglées soit à \SI{8}{\kilo\hertz} soit à \SI{4}{\kilo\hertz} en fonction de la fréquence d'échantillonnage testée (ce paramètre est affiché sous le filtre dans le projet Proteus).
@@ -373,7 +373,7 @@
     \end{itemize}
 
     \paragraph{}
-    Dans tous les tests, le signal de sortie apparaît légèrement déphasé par rapport au signal d'entrée. Cet effet est dû au filtre de Laplace placée en sortie en plus du temps de traitement du signal. Plus le coefficient du filtre est élevé, plus le temps de traitement augmente et plus les signaux sont déphasés.
+    Dans tous les tests, le signal de sortie apparaît légèrement déphasé par rapport au signal d'entrée. Cet effet est dû au filtre de Laplace placé en sortie en plus du temps de traitement du signal. Plus le coefficient du filtre est élevé, plus le temps de traitement augmente et plus les signaux sont déphasés.
 
     \begin{figure}[H]
         \centering
@@ -480,7 +480,7 @@
 
     \subsection{Filtre passe-bas}
     \paragraph{}
-    Le filtre passe-bas a été testé avec des valeurs de fréquence de coupure progressives entre les deux valeurs limites : 0 et \SI{8}{\kilo\hertz} pour une fréquence d'échantillonnage de \SI{16}{\kilo\hertz} ou \SI{4}{\kilo\hertz} pour une fréquence d'échantillonnage de \SI{8}{\kilo\hertz}.
+    Le filtre passe-bas a été testé avec des valeurs de fréquence de coupure progressives entre les deux valeurs limites : 0 à \SI{8}{\kilo\hertz} pour une fréquence d'échantillonnage de \SI{16}{\kilo\hertz} ou 0 à \SI{4}{\kilo\hertz} pour une fréquence d'échantillonnage de \SI{8}{\kilo\hertz}.
 
     \paragraph{}
     Les analyses de Fourier sont les plus intéressantes ici puisqu'elles permettent de comparer les fréquences du signal d'entrée et du signal de sortie : le filtre laisse bien passer les fréquences qui se trouvent sous la fréquence de coupure et filtre celles qui sont au-dessus.
@@ -732,7 +732,7 @@
 
     \subsubsection{Test: 1 écho, durée de 200ms (8kHz)}
     \paragraph{}
-    Le filtre écho testé avec un écho d'une durée de \SI{200}{\milli\second} avec une fréquence d'échantillonnage de \SI{8}{\kilo\hertz} donne un résultat similaire au premier test. L'audio de sortie \emph{test\_echo\_1\_200ms\_8k.wav} permet d'entendre le même écho malgré la qualité d'audio moindre. Le signal de sortie est similaire : les échos apparaissent aux mêmes endroits, décalés de \SI{200}{\milli\second} par rapport au signal original.
+    Le filtre écho testé avec un écho d'une durée de \SI{200}{\milli\second} avec une fréquence d'échantillonnage de \SI{8}{\kilo\hertz} donne un résultat similaire au premier test. L'audio de sortie \emph{test\_echo\_1\_200ms\_8k.wav} permet d'entendre le même écho malgré la qualité audio moindre. Le signal de sortie est similaire : les échos apparaissent aux mêmes endroits, décalés de \SI{200}{\milli\second} par rapport au signal original.
     \begin{figure}[H]
         \centering
         \includegraphics[width=\textwidth]{./images/out_echo_1_200ms_8k.png}
@@ -776,6 +776,5 @@
     Pour la réalisation de ce projet, j'ai principalement rencontré des difficultés avec Proteus. J'ai conçu un programme avec un menu circulaire qui s'est révélé peu adapté aux tests en simulation. J'ai donc dû recompiler le programme pour chaque test ce qui m'a fait perdre du temps (en plus des plantages réguliers de Proteus). Pour les tests en "temps réel" ou pour une application qui ne serait plus en simulation, ce type de menu reste pratique.
 
     \paragraph{}
-    Le fait de proposer un menu assez riche a aussi le désavantage d'utiliser la mémoire qui pourrait être réservée aux filtres. L'espace en mémoire pour les données est limité à 3936 bytes et une programmation plus économe m'aurait permis d'implémenter un écho encore un peu plus long, sans toutefois pouvoir aller jusqu'à \SI{500}{\milli\second}. Puisque ce n'était pas un des critères demandés par le cahier des charges, je n'ai pas choisi de concevoir le programme de cette manière mais je suis consciente que des projets utilisant des ressources aussi limitée demande toujours d'être attentif\textperiodcentered ve à leur utilisation.
-
+    Le fait de proposer un menu assez riche a aussi le désavantage d'utiliser la mémoire qui pourrait être réservée aux filtres. L'espace en mémoire pour les données est limité à 3936 bytes et une programmation plus économe m'aurait permis d'implémenter un écho encore un peu plus long, sans toutefois pouvoir aller jusqu'à \SI{500}{\milli\second}. Puisque ce n'était pas un des critères demandés par le cahier des charges, je n'ai pas choisi de concevoir le programme de cette manière mais je suis consciente que des projets utilisant des ressources aussi limitées demandent toujours d'être attentif\textperiodcentered ve à leur utilisation.
 \end{document}
