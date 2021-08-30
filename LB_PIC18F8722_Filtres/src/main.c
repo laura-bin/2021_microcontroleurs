@@ -378,15 +378,15 @@ void main(void) {
                 switch (filter) {                   // depending on the filter selected:
                 case F_LOW_PASS:                        // compute the low-pass filter coefficients
                     omega = 2.0 * M_PI * (double) low_cutoff / (double) sampling / 1000.0;
-                    coef[0] = (int) round(omega / (2.0 + omega) * pow(2.0, COEF_SCALE));
-                    coef[1] = (int) round((2.0 - omega) / (2.0 + omega) * pow(2.0, COEF_SCALE));
+                    coef[0] = (int) floor(omega / (2.0 + omega) * pow(2.0, COEF_SCALE));
+                    coef[1] = (int) floor((2.0 - omega) / (2.0 + omega) * pow(2.0, COEF_SCALE));
                     // sprintf(text, "%4d %4d", coef[0], coef[1]);
                     // send_text_LCD(text, 3, 0);
                     break;
                 case F_HIGH_PASS:                       // or compute the low-pass filter coefficients
-                    omega = 2.0 * M_PI * (double)high_cutoff / (double)sampling / 1000.0;
-                    coef[0] = (int) round(2.0 / (2.0 + omega) * pow(2.0, COEF_SCALE));
-                    coef[1] = (int) round((2.0 - omega) / (2.0 + omega) * pow(2.0, COEF_SCALE));
+                    omega = 2.0 * M_PI * (double) high_cutoff / (double) sampling / 1000.0;
+                    coef[0] = (int) floor(2.0 / (2.0 + omega) * pow(2.0, COEF_SCALE));
+                    coef[1] = (int) floor((2.0 - omega) / (2.0 + omega) * pow(2.0, COEF_SCALE));
                     // sprintf(text, "%4d %4d", coef[0], coef[1]);
                     // send_text_LCD(text, 3, 0);
                     break;
