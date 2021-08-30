@@ -182,7 +182,7 @@ void update_echoes(int new_val);                // update the number of echoes a
 
 void __interrupt(high_priority) Int_Vect_High(void) {
     int i;
-    long output;    // temporary variable used to compute the output signal value
+    int output;    // temporary variable used to compute the output signal value
 
     TICK = 1;                       // debug tick ON
 
