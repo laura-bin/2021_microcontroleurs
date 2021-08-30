@@ -61,31 +61,26 @@
 #define IN_BUF_SIZE         2000    // input signal buffer size
 #define OUT_BUF_SIZE        1       // output signal buffer size
 
+
+// Global variables (used by the interruption & the main program)
 int sig_in[10];                     // input signal buffer
 int sig_out[OUT_BUF_SIZE];          // output signal buffer
 int buf_index;                      // input buffer index
 
-// Global variables (used by the interruption & the main program)
+char filter;                        // current filter selected
+int sampling;                       // sampling frequency (16kHz)
+int mov_avg_steps;                  // moving average filter number of steps
+int cutoff;                         // low/high-pass filters cutoff frequency
+int echo_delay;                     // echo filter delay
+int echoes;                         // echo filter number of echoes
+
 // signed char sig_in[IN_BUF_SIZE];    
 // signed char sig_out[OUT_BUF_SIZE];  
 // int index[F_ECHO_N_MAX+1];          
 // int coef[F_ECHO_N_MAX+1];           // coefficients used to compute the output signal
-// char filter;                        // current filter selected
-// int sampling;                       // sampling frequency (8 or 16 kHz)
-// char mov_avg_coef;                  // moving average filter coefficient (1-3 -> 2, 4 or 8)
-// int low_cutoff;                     // low-pass filter cutoff frequency
-// int high_cutoff;                    // high-pass filter cutoff frequency
-// int echo_delay;                     // echo filter delay
-// int echoes;                         // echo filter number of echoes (1, 2 or 3)
 
 // Display function
-// void display_parameters(void);                  // display all the parameters
-// void update_sampling_frequency(int new_val);    // update the sampling frequency and display it
-// void update_mov_avg_coef(char new_val);         // update the moving average coefficient and display it
-// void update_low_cutoff(int new_val);            // update the low cutoff frequency and display it
-// void update_high_cutoff(int new_val);           // update the high cutoff frequency and display it
-// void update_echo_delay(int new_val);            // update the echo delay and display it
-// void update_echoes(int new_val);                // update the number of echoes and display it
+void display_parameters(void);                  // display all the parameters
 
 // void __interrupt(high_priority) Int_Vect_High(void) {
 //     int i;
@@ -155,8 +150,6 @@ void __attribute__((interrupt(auto_psv))) _T1Interrupt(void) {
     LDAC = 0;               // load the DAC
     LDAC = 1;
 
-    // DAC0808 = (unsigned char) (output + 128);
-    
     // input buffer = ADC1BUF0;
 
     TICK = 0;
@@ -191,7 +184,11 @@ void main(void) {
     _T1IP = 7;                                  // Timer1 priority
     _T1IF = 0;                                  // Timer1 interrupt flag cleared
     
-    
+    // Filter parameters initialisation
+    sampling = 16;
+    filter = F_MOV_AVG;
+    mov_avg_steps = 2;
+    display_parameters();
     
     // init LCD
     // send text to LCD
@@ -505,95 +502,39 @@ void main(void) {
 //     }
 }
 
-// void display_parameters() {
-//     char text[19];
-//     switch (filter) {
-// //     case F_MOV_AVG:
-//         send_text_LCD("Moving avg filter ", M_FILTER, 0);
-//         sprintf(text, "Sampling %6d Hz", sampling*1000);
-//         send_text_LCD(text, M_SAMPLING, 0);
-//         sprintf(text, "Steps       %6d", 1 << mov_avg_coef);
-//         send_text_LCD(text, M_VALUE, 0);
-//         send_text_LCD("                  ", M_VALUE2, 0);
-//         break;
-//     case F_LOW_PASS:
-//         send_text_LCD("Low-pass filter   ", M_FILTER, 0);
-//         sprintf(text, "Sampling %6d Hz", sampling*1000);
-//         send_text_LCD(text, M_SAMPLING, 0);
-//         sprintf(text, "Cutoff %8u Hz", low_cutoff);
-//         send_text_LCD(text, M_VALUE, 0);
-//         send_text_LCD("                  ", M_VALUE2, 0);
-//         break;
-//     case F_HIGH_PASS:
-//         send_text_LCD("High-pass filter  ", M_FILTER, 0);
-// //         sprintf(text, "Sampling %6d Hz", sampling*1000);
-//         send_text_LCD(text, M_SAMPLING, 0);
-//         sprintf(text, "Cutoff %8u Hz", high_cutoff);
-//         send_text_LCD(text, M_VALUE, 0);
-//         send_text_LCD("                  ", M_VALUE2, 0);
-//         break;
-//     case F_ECHO:
-//         send_text_LCD("Echo filter       ", M_FILTER, 0);
-//         sprintf(text, "Sampling %6d Hz", sampling*1000);
-//         send_text_LCD(text, M_SAMPLING, 0);
-// //         sprintf(text, "Delay %9d ms", echo_delay / sampling);
-//         send_text_LCD(text, M_VALUE, 0);
-//         sprintf(text, "Echoes %11d", echoes);
-//         send_text_LCD(text, M_VALUE2, 0);
-//         break;
-//     default:
-//         break;
-//     }
-// }
-
-// void update_sampling_frequency(int new_val) {
-//     char text[19];
-//     sampling = new_val;
-//     sprintf(text, "%6d", sampling*1000);
-//     send_text_LCD(text, M_SAMPLING, 9);
-// }
-
-// void update_mov_avg_coef(char new_val) {
-//     char text[19];
-//     mov_avg_coef = new_val;
-//     if (filter == F_MOV_AVG) {
-//         sprintf(text, "%6d", 1 << mov_avg_coef);
-//         send_text_LCD(text, M_VALUE, 12);
-//     }
-// }
-
-// void update_low_cutoff(int new_val) {
-//     char text[19];
-//     low_cutoff = new_val;
-//     if (filter == F_LOW_PASS) {
-//         sprintf(text, "%8u", low_cutoff);
-//         send_text_LCD(text, M_VALUE, 7);
-//     }
-// }
-// 
-// void update_high_cutoff(int new_val) {
-//     char text[19];
-//     high_cutoff = new_val;
-//     if (filter == F_HIGH_PASS) {
-//         sprintf(text, "%8u", high_cutoff);
-//         send_text_LCD(text, M_VALUE, 7);
-//     }
-// }
-// 
-// void update_echo_delay(int new_val) {
-//     char text[19];
-//     echo_delay = new_val;
-//     if (filter == F_ECHO) {
-//         sprintf(text, "%9d", echo_delay / sampling);
-//         send_text_LCD(text, M_VALUE, 6);
-//     }
-// }
-
-// void update_echoes(int new_val) {
-//     char text[19];
-//     echoes = new_val;
-//     if (filter == F_ECHO) {
-// //         sprintf(text, "%11d", echoes);
-//         send_text_LCD(text, M_VALUE2, 7);
- //    }
-// }
+void display_parameters() {
+    char text[20];
+    switch (filter) {
+    case F_MOV_AVG:
+        send_text_LCD("Moving avg filter   ", 0, 0);
+        send_text_LCD("Sampling       16kHz", 1, 0);
+        sprintf(text, "Steps         %6d", mov_avg_steps);
+        send_text_LCD(text, 2, 0);
+        send_text_LCD("                    ", 3, 0);
+        break;
+    case F_LOW_PASS:
+        send_text_LCD("Low-pass filter     ", 0, 0);
+        send_text_LCD("Sampling       16kHz", 1, 0);
+        sprintf(text, "Cutoff    %8dHz", cutoff);
+        send_text_LCD(text, 2, 0);
+        send_text_LCD("                    ", 3, 0);
+        break;
+    case F_HIGH_PASS:
+        send_text_LCD("High-pass filter    ", 0, 0);
+        send_text_LCD("Sampling       16kHz", 1, 0);
+        sprintf(text, "Cutoff    %8dHz", cutoff);
+        send_text_LCD(text, 2, 0);
+        send_text_LCD("                    ", 3, 0);
+        break;
+    case F_ECHO:
+        send_text_LCD("Echo filter         ", 0, 0);
+        send_text_LCD("Sampling       16kHz", 1, 0);
+        sprintf(text, "Delay    %9dms", echo_delay / sampling);
+        send_text_LCD(text, 2, 0);
+        sprintf(text, "Echoes   %11d", echoes);
+        send_text_LCD(text, 3, 0);
+        break;
+    default:
+        break;
+    }
+}
